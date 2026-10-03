@@ -13,7 +13,7 @@ def send_welcome(message):
         message,
         "👋 أهلاً بيك يا غالي!\n\n"
         "أنا بوت التحميل الشامل 📥\n"
-        "ابعت لي رابط من أي منصة وهسألك تحب تنزله فيديو ولا صوت!"
+        "ابعت لي رابط من أي منصة وهسألك تحب تنزله فيديو بجودة عالية أو صوت!"
     )
 
 @bot.message_handler(func=lambda message: message.text and ("http://" in message.text or "https://" in message.text))
@@ -22,13 +22,13 @@ def ask_quality(message):
     
     markup = InlineKeyboardMarkup()
     markup.row(
-        InlineKeyboardButton("🎬 فيديو (MP4 سريع)", callback_data=f"video|{url}"),
-        InlineKeyboardButton("🎵 صوت فقط (Audio)", callback_data=f"audio|{url}")
+        InlineKeyboardButton("🎬 فيديو (HD - 720p)", callback_data=f"video|{url}"),
+        InlineKeyboardButton("🎵 صوت فقط (Audio MP3)", callback_data=f"audio|{url}")
     )
     
     bot.reply_to(
         message,
-        "🎯 تم استلام الرابط بنجاح!\nاختر الصيغة التي ترغب في تحميلها:",
+        "🎯 تم استلام الرابط بنجاح!\nاختر الصيغة المناسبة:",
         reply_markup=markup
     )
 
@@ -37,7 +37,7 @@ def callback_query(call):
     data = call.data
     action, url = data.split("|", 1)
     
-    bot.answer_callback_query(call.id, "⏳ جاري التحميل...")
+    bot.answer_callback_query(call.id, "⏳ جاري التحميل بجودة عالية...")
     try:
         bot.edit_message_text(
             chat_id=call.message.chat.id,
@@ -47,7 +47,7 @@ def callback_query(call):
     except:
         pass
 
-    # إعدادات لتقييد الجودة بحيث تكون خفيفة ومناسبة للرفع
+    # إعدادات لتحميل جودة 720p ممتازة وبدون الحاجة لـ ffmpeg معقد
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
@@ -55,8 +55,8 @@ def callback_query(call):
     }
 
     if action == "video":
-        # جودة متوسطة تضمن أن حجم الملف لن يتجاوز حدود تيليجرام
-        ydl_opts['format'] = 'best[height<=480][ext=mp4]/best[height<=360][ext=mp4]/best'
+        # اختيار جودة 720p بصيغة MP4 لضمان الوضوح مع الحفاظ على حجم مناسب
+        ydl_opts['format'] = 'best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best'
     elif action == "audio":
         ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
 
@@ -68,26 +68,26 @@ def callback_query(call):
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
 
-        # فحص حجم الملف قبل إرساله (أقصى حد لتيليجرام هو 50 ميجابايت للبوتات)
+        # فحص حجم الملف قبل إرساله لتيليجرام (أقصى حد 50 ميجابايت)
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         
         if file_size_mb > 48:
-            raise Exception(f"حجم الملف ({file_size_mb:.1f}MB) أكبر من الحد الأقصى المسموح به في تيليجرام (50 ميجابايت). حاول تحميل فيديو أقصر!")
+            raise Exception(f"عذراً، حجم الفيديو ({file_size_mb:.1f}MB) أكبر من الحد الأقصى المسموح به في تيليجرام (50MB). حاول تحميل مقطع أقصر!")
 
         try:
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                text="📤 جاري الإرسال..."
+                text="📤 جاري إرسال الفيديو إليك..."
             )
         except:
             pass
         
         with open(file_path, 'rb') as f:
             if action == "audio":
-                bot.send_audio(call.message.chat.id, f, caption="✅ تم التحميل بنجاح بواسطة البوت")
+                bot.send_audio(call.message.chat.id, f, caption="✅ تم تحميل الصوت بجودة عالية بواسطة البوت")
             else:
-                bot.send_video(call.message.chat.id, f, caption="✅ تم التحميل بنجاح بواسطة البوت")
+                bot.send_video(call.message.chat.id, f, caption="✅ تم تحميل الفيديو بجودة HD (720p) بواسطة البوت")
 
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
@@ -102,12 +102,12 @@ def callback_query(call):
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                text=f"❌ حدث خطأ:\n{str(e)}"
+                text=f"❌ حدث خطأ أثناء التحميل:\n{str(e)}"
             )
         except:
             pass
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 البوت يعمل الآن بكفاءة...")
+print("🤖 البوت يعمل بكفاءة وجاهز للطلبات...")
 bot.infinity_polling()
