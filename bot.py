@@ -37,17 +37,16 @@ def callback_query(call):
     data = call.data
     action, url = data.split("|", 1)
     
-    bot.answer_callback_query(call.id, "⏳ جاري التحميل بجودة عالية...")
+    bot.answer_callback_query(call.id, "⏳ جاري فحص وتحميل الملف...")
     try:
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            text="⏳ جاري التحميل، انتظر قليلاً..."
+            text="⏳ جاري المعالجة، انتظر قليلاً..."
         )
     except:
         pass
 
-    # إعدادات لتحميل جودة 720p ممتازة وبدون الحاجة لـ ffmpeg معقد
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
@@ -55,7 +54,6 @@ def callback_query(call):
     }
 
     if action == "video":
-        # اختيار جودة 720p بصيغة MP4 لضمان الوضوح مع الحفاظ على حجم مناسب
         ydl_opts['format'] = 'best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best'
     elif action == "audio":
         ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
@@ -64,16 +62,35 @@ def callback_query(call):
     try:
         os.makedirs("downloads", exist_ok=True)
         
+        # استخراج معلومات الفيديو أولاً بدون تحميل كامل لو أمكن، أو التحميل ثم الفحص
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
+            video_title = info.get('title', 'فيديو بدون عنوان')
+            webpage_url = info.get('webpage_url', url)
 
-        # فحص حجم الملف قبل إرساله لتيليجرام (أقصى حد 50 ميجابايت)
+        # فحص حجم الملف (أقصى حد لتيليجرام 50 ميجا)
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         
+        # لو الملف أكبر من 48 ميجا، نفذ الحل البديل (إرسال رابط مباشر عالي الجودة)
         if file_size_mb > 48:
-            raise Exception(f"عذراً، حجم الفيديو ({file_size_mb:.1f}MB) أكبر من الحد الأقصى المسموح به في تيليجرام (50MB). حاول تحميل مقطع أقصر!")
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path) # مسح الملف الكبير من السيرفر عشان ما يستهلكش مساحة
+                
+            markup_link = InlineKeyboardMarkup()
+            markup_link.row(InlineKeyboardButton("🔗 مشاهدة / تحميل مباشر (HD)", url=webpage_url))
+            
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=f"⚠️ **عذراً، حجم الفيديو كبير جداً ({file_size_mb:.1f}MB)** ويتجاوز حدود تيليجرام (50MB).\n\n"
+                     f"💡 **الحل البديل:** يمكنك تحميله أو مشاهدته مباشرة بأعلى جودة عبر الرابط أدناه:",
+                reply_markup=markup_link,
+                parse_mode="Markdown"
+            )
+            return
 
+        # لو حجمه طبيعي وأقل من 50 ميجا، ابعته عادي جداً
         try:
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
@@ -85,9 +102,9 @@ def callback_query(call):
         
         with open(file_path, 'rb') as f:
             if action == "audio":
-                bot.send_audio(call.message.chat.id, f, caption="✅ تم تحميل الصوت بجودة عالية بواسطة البوت")
+                bot.send_audio(call.message.chat.id, f, caption=f"✅ {video_title}")
             else:
-                bot.send_video(call.message.chat.id, f, caption="✅ تم تحميل الفيديو بجودة HD (720p) بواسطة البوت")
+                bot.send_video(call.message.chat.id, f, caption=f"✅ {video_title} (HD)")
 
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
@@ -102,12 +119,12 @@ def callback_query(call):
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
-                text=f"❌ حدث خطأ أثناء التحميل:\n{str(e)}"
+                text=f"❌ حدث خطأ أثناء المعالجة:\n{str(e)}"
             )
         except:
             pass
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 البوت يعمل بكفاءة وجاهز للطلبات...")
+print("🤖 البوت يعمل بكفاءة مع نظام الحلول البديلة...")
 bot.infinity_polling()
