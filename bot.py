@@ -4,7 +4,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import yt_dlp
 
 # --- توكن البوت ---
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8669181055:AAGZ4BSyDcqJeb0AOUIA4BJs3330z6Vt_mI")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8927019889:AAFTVSH0bPQsquSwlfByHwUR3wcXY6jJwQA")
 bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
