@@ -9,14 +9,10 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("📢 قناة البوت الرسمية", url="https://t.me/A_ToolsX"))
-    
     bot.reply_to(
         message,
-        "👋 **أهلاً بك يا مروان في بوت التحميل الشامل A-TOOLS X!** 📥\n\n"
+        "👋 **أهلاً بك يا مروان في بوت Vortex downloader!** 📥\n\n"
         "أرسل لي رابط أي فيديو أو صوت، وسأتيح لك تحميله بجودة عالية أو برابط مباشر لو الحجم كبير.",
-        reply_markup=markup,
         parse_mode="Markdown"
     )
 
@@ -90,8 +86,6 @@ def callback_query(call):
             else:
                 markup_link.row(InlineKeyboardButton("📥 🎵 تحميل الصوت مباشرة (MP3)", url=direct_download_url))
                 file_type_text = "الصوت"
-                
-            markup_link.row(InlineKeyboardButton("📢 زيارة قناة البوت", url="https://t.me/A_ToolsX"))
 
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
@@ -116,9 +110,9 @@ def callback_query(call):
         
         with open(file_path, 'rb') as f:
             if action == "audio":
-                bot.send_audio(call.message.chat.id, f, caption=f"🎵 **{video_title}**\n✅ تم التحميل بنجاح بواسطة A-TOOLS X", parse_mode="Markdown")
+                bot.send_audio(call.message.chat.id, f, caption=f"🎵 **{video_title}**\n✅ تم التحميل بواسطة Vortex downloader", parse_mode="Markdown")
             else:
-                bot.send_video(call.message.chat.id, f, caption=f"🎬 **{video_title} (HD)**\n✅ تم التحميل بنجاح بواسطة A-TOOLS X", parse_mode="Markdown")
+                bot.send_video(call.message.chat.id, f, caption=f"🎬 **{video_title} (HD)**\n✅ تم التحميل بواسطة Vortex downloader", parse_mode="Markdown")
 
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
@@ -141,5 +135,5 @@ def callback_query(call):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 A-TOOLS X يعمل الآن بكفاءة وبدون أي شروط اشتراك...")
+print("🤖 Vortex downloader يعمل الآن بكفاءة وبدون أي قنوات إجبارية...")
 bot.infinity_polling()
