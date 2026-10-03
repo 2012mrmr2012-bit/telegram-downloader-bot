@@ -11,7 +11,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 def send_welcome(message):
     bot.reply_to(
         message,
-        "👋 **أهلاً بك يا مروان في بوت Vortex downloader!** 📥\n\n"
+        "👋 **أهلاً بك في بوت Vortex downloader!** 📥\n\n"
         "أرسل لي رابط أي فيديو أو صوت، وسأتيح لك تحميله بجودة عالية أو برابط مباشر لو الحجم كبير.",
         parse_mode="Markdown"
     )
