@@ -62,35 +62,34 @@ def callback_query(call):
     try:
         os.makedirs("downloads", exist_ok=True)
         
-        # استخراج معلومات الفيديو أولاً بدون تحميل كامل لو أمكن، أو التحميل ثم الفحص
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
             video_title = info.get('title', 'فيديو بدون عنوان')
-            webpage_url = info.get('webpage_url', url)
+            direct_download_url = info.get('url')
 
         # فحص حجم الملف (أقصى حد لتيليجرام 50 ميجا)
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         
-        # لو الملف أكبر من 48 ميجا، نفذ الحل البديل (إرسال رابط مباشر عالي الجودة)
+        # لو الملف أكبر من 48 ميجا، امسح الملف وابعث رابط التحميل المباشر للملف
         if file_size_mb > 48:
             if file_path and os.path.exists(file_path):
-                os.remove(file_path) # مسح الملف الكبير من السيرفر عشان ما يستهلكش مساحة
+                os.remove(file_path)
                 
             markup_link = InlineKeyboardMarkup()
-            markup_link.row(InlineKeyboardButton("🔗 مشاهدة / تحميل مباشر (HD)", url=webpage_url))
+            markup_link.row(InlineKeyboardButton("📥 اضغط هنا لتحميل الملف مباشرة", url=direct_download_url))
             
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
                 text=f"⚠️ **عذراً، حجم الفيديو كبير جداً ({file_size_mb:.1f}MB)** ويتجاوز حدود تيليجرام (50MB).\n\n"
-                     f"💡 **الحل البديل:** يمكنك تحميله أو مشاهدته مباشرة بأعلى جودة عبر الرابط أدناه:",
+                     f"🔗 **رابط التحميل المباشر للملف (جاهز للتحميل الفوري):**",
                 reply_markup=markup_link,
                 parse_mode="Markdown"
             )
             return
 
-        # لو حجمه طبيعي وأقل من 50 ميجا، ابعته عادي جداً
+        # لو حجمه طبيعي وأقل من 50 ميجا، ابعته كفيديو عادي
         try:
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
@@ -126,5 +125,5 @@ def callback_query(call):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 البوت يعمل بكفاءة مع نظام الحلول البديلة...")
+print("🤖 البوت يعمل بكفاءة وبدون أي شروط اشتراك...")
 bot.infinity_polling()
