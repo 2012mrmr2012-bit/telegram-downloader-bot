@@ -43,21 +43,23 @@ def callback_query(call):
     quality, url = data.split("|", 1)
     
     bot.answer_callback_query(call.id, "⏳ جاري التحميل، انتظر قليلاً...")
-    bot.edit_message_text(
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        text="⏳ جاري التحميل من المنصة، انتظر قليلاً..."
-    )
+    try:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text="⏳ جاري التحميل من المنصة، انتظر قليلاً..."
+        )
+    except:
+        pass
 
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
     }
 
-    if quality == "hd":
-        ydl_opts['format'] = 'bestvideo+bestaudio/best'
-    elif quality == "sd":
-        ydl_opts['format'] = 'worst[ext=mp4]/worst'
+    if quality == "hd" or quality == "sd":
+        # استخدام صيغة مدمجة جاهزة لتجنب مشاكل الـ ffmpeg لو مش متوفر بشكل كامل
+        ydl_opts['format'] = 'best[ext=mp4]/best'
     elif quality == "mp3":
         ydl_opts['format'] = 'bestaudio/best'
         ydl_opts['postprocessors'] = [{
@@ -77,11 +79,14 @@ def callback_query(call):
             if quality == "mp3":
                 file_path = os.path.splitext(file_path)[0] + ".mp3"
 
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text="📤 جاري إرسال الملف إليك..."
-        )
+        try:
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text="📤 جاري إرسال الملف إليك..."
+            )
+        except:
+            pass
         
         with open(file_path, 'rb') as f:
             if quality == "mp3":
@@ -92,7 +97,10 @@ def callback_query(call):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
             
-        bot.delete_message(call.message.chat.id, call.message.message_id)
+        try:
+            bot.delete_message(call.message.chat.id, call.message.message_id)
+        except:
+            pass
 
     except Exception as e:
         try:
