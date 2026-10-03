@@ -6,8 +6,8 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import yt_dlp
 
 # --- توكن البوت (من متغير بيئة فقط، بدون قيمة افتراضية) ---
-BOT_TOKEN = os.environ["8927019889:AAFTVSH0bPQsquSwlfByHwUR3wcXY6jJwQA"]
-bot = telebot.TeleBot(8927019889:AAFTVSH0bPQsquSwlfByHwUR3wcXY6jJwQA)
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+bot = telebot.TeleBot(BOT_TOKEN)
 
 SEND_LIMIT_MB = 48   # الحد اللي نبدأ عنده الضغط
 TARGET_MB = 46       # الحجم المستهدف بعد الضغط (هامش أمان تحت 50MB)
