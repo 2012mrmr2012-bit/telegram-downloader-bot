@@ -22,7 +22,7 @@ def ask_quality(message):
     
     markup = InlineKeyboardMarkup()
     markup.row(
-        InlineKeyboardButton("🎬 فيديو (جودة مناسبة MP4)", callback_data=f"video|{url}"),
+        InlineKeyboardButton("🎬 فيديو (MP4 سريع)", callback_data=f"video|{url}"),
         InlineKeyboardButton("🎵 صوت فقط (Audio)", callback_data=f"audio|{url}")
     )
     
@@ -47,7 +47,7 @@ def callback_query(call):
     except:
         pass
 
-    # إعدادات تضمن حجم ملف صغير يتوافق مع حدود تيليجرام وبدون أخطاء ffmpeg
+    # إعدادات لتقييد الجودة بحيث تكون خفيفة ومناسبة للرفع
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
@@ -55,8 +55,8 @@ def callback_query(call):
     }
 
     if action == "video":
-        # جودة 720p أو أقل عشان ما تضربش خطأ الحجم الكبير (413)
-        ydl_opts['format'] = 'best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best'
+        # جودة متوسطة تضمن أن حجم الملف لن يتجاوز حدود تيليجرام
+        ydl_opts['format'] = 'best[height<=480][ext=mp4]/best[height<=360][ext=mp4]/best'
     elif action == "audio":
         ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
 
@@ -67,6 +67,12 @@ def callback_query(call):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
+
+        # فحص حجم الملف قبل إرساله (أقصى حد لتيليجرام هو 50 ميجابايت للبوتات)
+        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        
+        if file_size_mb > 48:
+            raise Exception(f"حجم الملف ({file_size_mb:.1f}MB) أكبر من الحد الأقصى المسموح به في تيليجرام (50 ميجابايت). حاول تحميل فيديو أقصر!")
 
         try:
             bot.edit_message_text(
