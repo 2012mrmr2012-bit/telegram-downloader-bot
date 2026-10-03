@@ -389,14 +389,21 @@ app = Flask(__name__)
 
 
 def auth_job():
-    """يتحقق من توقيع تيليجرام ومن إن الطلب يخص نفس المستخدم."""
+    """يتحقق من توقيع تيليجرام ومن إن الطلب يخص نفس المستخدم، ويرجع سبب الرفض."""
     data = request.get_json(silent=True) or {}
     key = str(data.get("key", ""))
     user = verify_init_data(request.headers.get("X-Init-Data", ""))
     job = jobs.get(key)
-    if not user or not job or user.get("id") != job["user_id"]:
-        return None, key, data
-    return job, key, data
+    if not user:
+        reason = "bad_signature"
+    elif not job:
+        reason = "expired"
+    elif user.get("id") != job["user_id"]:
+        reason = "wrong_user"
+    else:
+        return job, key, data, None
+    print(f"[AUTH] رفض الطلب: {reason} (key={key}, عدد الطلبات={len(jobs)})", flush=True)
+    return None, key, data, reason
 
 
 def prepare_job(key):
@@ -447,9 +454,9 @@ def mini_app():
 
 @app.post("/api/prepare")
 def api_prepare():
-    job, key, _ = auth_job()
+    job, key, _, reason = auth_job()
     if not job:
-        return jsonify(ok=False, error="unauthorized"), 403
+        return jsonify(ok=False, error=reason), 403
     with jobs_lock:
         should_start = job['state'] == 'new'
         if should_start:
@@ -479,9 +486,9 @@ def media(key):
 
 @app.post("/api/trim")
 def api_trim():
-    job, key, data = auth_job()
+    job, key, data, reason = auth_job()
     if not job:
-        return jsonify(ok=False, error="unauthorized"), 403
+        return jsonify(ok=False, error=reason), 403
     try:
         start = float(data["start"])
         end = float(data["end"])
