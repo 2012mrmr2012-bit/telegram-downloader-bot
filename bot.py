@@ -183,7 +183,9 @@ def run_ffmpeg(cmd):
         print("[ERROR] ffmpeg غير مثبت على السيرفر!", flush=True)
         return False
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+        cmd = [cmd[0], "-nostdin", "-hide_banner", "-loglevel", "error"] + cmd[1:]
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           stdin=subprocess.DEVNULL, timeout=900)
     except subprocess.TimeoutExpired:
         print("[ERROR] ffmpeg تجاوز المهلة (900 ثانية)", flush=True)
         return False
@@ -191,26 +193,46 @@ def run_ffmpeg(cmd):
         print(f"[ERROR] ffmpeg: {e}", flush=True)
         return False
     if r.returncode != 0:
-        print("[ERROR] ffmpeg فشل:\n" + r.stderr[-1500:], flush=True)
+        hint = " (غالباً نفاد الذاكرة OOM)" if r.returncode in (-9, 137) else ""
+        print(f"[ERROR] ffmpeg فشل (code={r.returncode}){hint}:\n" + r.stderr[-1500:], flush=True)
         return False
     return True
 
 
 def trim_video(input_path, start, end):
     output_path = os.path.splitext(input_path)[0] + "_trim.mp4"
+    length = f"{end - start:.3f}"
+
+    # المحاولة 1: إعادة ترميز خفيفة على الذاكرة (دقيقة على الثانية)
     cmd = [
         "ffmpeg", "-y",
         "-ss", f"{start:.3f}", "-i", input_path,
-        "-t", f"{end - start:.3f}",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-t", length,
+        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
+        "-threads", "2", "-x264-params", "rc-lookahead=0:sync-lookahead=0",
+        "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart",
         output_path,
     ]
-    if not run_ffmpeg(cmd):
-        safe_remove(output_path)
-        return None
-    return output_path
+    if run_ffmpeg(cmd) and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        return output_path
+    safe_remove(output_path)
+
+    # المحاولة 2 (احتياطية): نسخ بدون ترميز، سريعة وبلا ذاكرة (قد تتأخر البداية لأقرب إطار مفتاحي)
+    print("[WARN] فشل إعادة الترميز، نجرب القص بالنسخ المباشر", flush=True)
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", f"{start:.3f}", "-i", input_path,
+        "-t", length,
+        "-c", "copy", "-avoid_negative_ts", "make_zero",
+        "-movflags", "+faststart",
+        output_path,
+    ]
+    if run_ffmpeg(cmd) and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+        return output_path
+    safe_remove(output_path)
+    return None
 
 
 def compress_video(input_path, duration, target_mb=TARGET_MB):
@@ -236,7 +258,7 @@ def compress_video(input_path, duration, target_mb=TARGET_MB):
     output_path = os.path.splitext(input_path)[0] + "_compressed.mp4"
     cmd = [
         "ffmpeg", "-y", "-i", input_path,
-        "-c:v", "libx264", "-preset", "veryfast",
+        "-c:v", "libx264", "-preset", "veryfast", "-threads", "2",
         "-b:v", f"{video_kbps}k",
         "-maxrate", f"{video_kbps}k",
         "-bufsize", f"{video_kbps * 2}k",
