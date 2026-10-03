@@ -3,8 +3,8 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import yt_dlp
 
-# --- حط بياناتك هنا ---
-BOT_TOKEN = "حط_التوكن_اللي_أخذه_من_البوت_فادر_هنا"
+# --- التوكن (يأخذ من السيرفر بأمان، أو القيمة المباشرة كاحتياطي) ---
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8669181055:AAGZ4BSyDcqJeb0AOUIA4BJs3330z6Vt_mI")
 # --------------------
 
 app = Client("downloader_bot", bot_token=BOT_TOKEN)
@@ -53,7 +53,6 @@ async def download_selected_quality(client, callback_query: CallbackQuery):
     }
 
     if quality == "hd":
-        # للتعامل بمرونة مع المنصات المختلفة (لو الجودة العالية مش مفصولة زي يوتيوب، هياخد أفضل صيغة متاحة)
         ydl_opts['format'] = 'bestvideo+bestaudio/best'
     elif quality == "sd":
         ydl_opts['format'] = 'worst[ext=mp4]/worst'
@@ -82,7 +81,6 @@ async def download_selected_quality(client, callback_query: CallbackQuery):
         if quality == "mp3":
             await callback_query.message.reply_audio(audio=file_path, caption="✅ تم تحميل الصوت بنجاح بواسطة البوت")
         else:
-            # التأكد من إرسال الفيديو بالصيغة الصحيحة
             await callback_query.message.reply_video(video=file_path, caption="✅ تم تحميل الفيديو بنجاح بواسطة البوت")
 
         # حذف الملف من الكمبيوتر لتوفير المساحة
@@ -92,8 +90,6 @@ async def download_selected_quality(client, callback_query: CallbackQuery):
         await callback_query.message.delete()
 
     except Exception as e:
-        # بعض المنصات ممكن تطلب إعدادات خاصة لو حصل خطأ في الدمج
-        # في حالة فشل تنسيق hd في بعض المواقع، نجرب التحميل بأفضل صيغة متاحة مباشرة
         if quality == "hd" and ("Requested format is not available" in str(e) or "merge" in str(e).lower()):
             try:
                 ydl_opts['format'] = 'best'
