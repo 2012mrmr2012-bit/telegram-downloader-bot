@@ -22,7 +22,7 @@ def ask_quality(message):
     
     markup = InlineKeyboardMarkup()
     markup.row(
-        InlineKeyboardButton("🎬 فيديو (MP4)", callback_data=f"video|{url}"),
+        InlineKeyboardButton("🎬 فيديو (جودة مناسبة MP4)", callback_data=f"video|{url}"),
         InlineKeyboardButton("🎵 صوت فقط (Audio)", callback_data=f"audio|{url}")
     )
     
@@ -47,7 +47,7 @@ def callback_query(call):
     except:
         pass
 
-    # إعدادات بسيطة جداً لا تتطلب أي برامج خارجية
+    # إعدادات تضمن حجم ملف صغير يتوافق مع حدود تيليجرام وبدون أخطاء ffmpeg
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
@@ -55,7 +55,8 @@ def callback_query(call):
     }
 
     if action == "video":
-        ydl_opts['format'] = 'best[ext=mp4]/best'
+        # جودة 720p أو أقل عشان ما تضربش خطأ الحجم الكبير (413)
+        ydl_opts['format'] = 'best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best'
     elif action == "audio":
         ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
 
@@ -78,9 +79,9 @@ def callback_query(call):
         
         with open(file_path, 'rb') as f:
             if action == "audio":
-                bot.send_audio(call.message.chat.id, f, caption="✅ تم التحميل بنجاح")
+                bot.send_audio(call.message.chat.id, f, caption="✅ تم التحميل بنجاح بواسطة البوت")
             else:
-                bot.send_video(call.message.chat.id, f, caption="✅ تم التحميل بنجاح")
+                bot.send_video(call.message.chat.id, f, caption="✅ تم التحميل بنجاح بواسطة البوت")
 
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
@@ -102,5 +103,5 @@ def callback_query(call):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 البوت يعمل الآن...")
+print("🤖 البوت يعمل الآن بكفاءة...")
 bot.infinity_polling()
