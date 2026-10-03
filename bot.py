@@ -3,11 +3,16 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import yt_dlp
 
-# --- التوكن (يأخذ من السيرفر بأمان، أو القيمة المباشرة كاحتياطي) ---
+# --- بيانات البوت ---
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8669181055:AAGZ4BSyDcqJeb0AOUIA4BJs3330z6Vt_mI")
-# --------------------
 
-app = Client("downloader_bot", bot_token=BOT_TOKEN)
+# تشغيل البوت باستخدام التوكن فقط مع تحديد api_id وهمي لتخطي المشكلة
+app = Client(
+    "downloader_bot",
+    bot_token=BOT_TOKEN,
+    api_id=611335,  # رقم افتراضي لتخطي متطلبات بايروجرام للبوتات
+    api_hash="d524891e4215f92272e257a3e743d548"
+)
 
 @app.on_message(filters.command("start"))
 async def start_command(client, message):
@@ -46,10 +51,9 @@ async def download_selected_quality(client, callback_query: CallbackQuery):
     
     await callback_query.message.edit_text("⏳ جاري التحميل من المنصة، انتظر قليلاً...")
 
-    # إعدادات متوافقة مع كل المنصات لضمان عدم حدوث أخطاء
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'noplaylist': True,  # تحميل الفيديو الفردي فقط لو الرابط لقائمة تشغيل
+        'noplaylist': True,
     }
 
     if quality == "hd":
@@ -72,7 +76,6 @@ async def download_selected_quality(client, callback_query: CallbackQuery):
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
             
-            # لو تم تحويله لصوت، امتداد الملف هيتغير لـ mp3
             if quality == "mp3":
                 file_path = os.path.splitext(file_path)[0] + ".mp3"
 
@@ -83,7 +86,6 @@ async def download_selected_quality(client, callback_query: CallbackQuery):
         else:
             await callback_query.message.reply_video(video=file_path, caption="✅ تم تحميل الفيديو بنجاح بواسطة البوت")
 
-        # حذف الملف من الكمبيوتر لتوفير المساحة
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
             
