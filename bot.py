@@ -152,9 +152,13 @@ def download_media(url, action, max_bytes=None):
 
     if action == "audio":
         opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
-    else:
+    elif shutil.which("ffmpeg"):
+        # ffmpeg موجود → ندمج أفضل فيديو مع أفضل صوت
         opts['format'] = ('bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/'
                           'best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best')
+    else:
+        # ffmpeg غير موجود → صيغ جاهزة بملف واحد (بدون دمج)
+        opts['format'] = 'best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best'
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -641,6 +645,9 @@ def main():
             print("🍪 تم تحميل ملف الكوكيز", flush=True)
         except Exception as e:
             print(f"[ERROR] فشل قراءة YT_COOKIES_B64: {e}", flush=True)
+
+    if not shutil.which("ffmpeg"):
+        print("[WARN] ffmpeg غير مثبت: لن يعمل القص ولا الضغط حتى تثبّته (RAILPACK_DEPLOY_APT_PACKAGES=ffmpeg)", flush=True)
 
     if not os.path.exists(INDEX_PATH):
         print("[WARN] ملف index.html غير موجود بجانب bot.py، الميني اب لن يعمل!", flush=True)
