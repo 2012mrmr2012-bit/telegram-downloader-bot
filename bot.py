@@ -649,6 +649,9 @@ def main():
     if not shutil.which("ffmpeg"):
         print("[WARN] ffmpeg غير مثبت: لن يعمل القص ولا الضغط حتى تثبّته (RAILPACK_DEPLOY_APT_PACKAGES=ffmpeg)", flush=True)
 
+    if not shutil.which("deno"):
+        print("[WARN] deno غير مثبت: يوتيوب يحتاج JavaScript runtime (RAILPACK_PACKAGES=deno)", flush=True)
+
     if not os.path.exists(INDEX_PATH):
         print("[WARN] ملف index.html غير موجود بجانب bot.py، الميني اب لن يعمل!", flush=True)
 
