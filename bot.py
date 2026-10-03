@@ -55,10 +55,11 @@ def callback_query(call):
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
+        # ميزة لتجاوز حماية يوتيوب وتأكيد أنك لست روبوت
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
     }
 
     if quality == "hd" or quality == "sd":
-        # استخدام صيغة مدمجة جاهزة لتجنب مشاكل الـ ffmpeg لو مش متوفر بشكل كامل
         ydl_opts['format'] = 'best[ext=mp4]/best'
     elif quality == "mp3":
         ydl_opts['format'] = 'bestaudio/best'
