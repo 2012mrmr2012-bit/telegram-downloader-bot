@@ -77,35 +77,35 @@ def callback_query(call):
         # فحص حجم الملف (حد تيليجرام 50 ميجا)
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         
-        # لو الملف حجمه تجاوز الحد الأقصى، نقدم زر تحميل مباشر بشكل شيك ومرتب
+        # لو الملف حجمه تجاوز الحد الأقصى، نقدم زر تحميل مباشر بشكل منسق وشيك جداً
         if file_size_mb > 48:
             if file_path and os.path.exists(file_path):
                 os.remove(file_path)
                 
             markup_link = InlineKeyboardMarkup()
             if action == "video":
-                markup_link.row(InlineKeyboardButton("📥 اضغط هنا لتحميل الفيديو مباشرة (HD)", url=direct_download_url))
+                # زرار منسق ومرتب بشكل احترافي للفيديو
+                markup_link.row(InlineKeyboardButton("📥 🎬 تحميل الفيديو مباشرة (HD)", url=direct_download_url))
                 file_type_text = "الفيديو"
-                icon = "🎬"
             else:
-                markup_link.row(InlineKeyboardButton("📥 اضغط هنا لتحميل الصوت مباشرة (Audio)", url=direct_download_url))
+                # زرار منسق ومرتب بشكل احترافي للصوت
+                markup_link.row(InlineKeyboardButton("📥 🎵 تحميل الصوت مباشرة (MP3)", url=direct_download_url))
                 file_type_text = "الصوت"
-                icon = "🎵"
                 
-            markup_link.row(InlineKeyboardButton("📢 زيارة القناة", url="https://t.me/A_ToolsX"))
+            markup_link.row(InlineKeyboardButton("📢 زيارة قناة البوت", url="https://t.me/A_ToolsX"))
 
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
                 text=f"⚠️ **عذراً، حجم {file_type_text} كبير جداً ({file_size_mb:.1f}MB)**\n"
                      f"ويتجاوز الحد الأقصى المسموح به في تيليجرام (50MB).\n\n"
-                     f"{icon} **تم توفير رابط تحميل مباشر وسريع لك أدناه:**",
+                     f"✨ **تم توفير زر التحميل المباشر أدناه بجودة عالية:**",
                 reply_markup=markup_link,
                 parse_mode="Markdown"
             )
             return
 
-        # لو حجمه طبيعي وأقل من 50 ميجا، يتم إرساله مباشرة بالشكل الصحيح
+        # لو حجمه طبيعي وأقل من 50 ميجا، يتم إرساله مباشرة
         try:
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
@@ -143,5 +143,5 @@ def callback_query(call):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 البوت يعمل بكفاءة وبأزرار تفاعلية أنيقة...")
+print("🤖 البوت يعمل بكفاءة وأزرار منسقة بشكل احترافي...")
 bot.infinity_polling()
