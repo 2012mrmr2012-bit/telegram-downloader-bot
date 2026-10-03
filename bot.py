@@ -14,8 +14,8 @@ def send_welcome(message):
     
     bot.reply_to(
         message,
-        "👋 **أهلاً بك يا مروان في بوت التحميل الشامل!** 📥\n\n"
-        "أرسل لي رابط أي فيديو أو صوت من (يوتيوب، تيك توك، إلخ)، وسأتيح لك تحميله بسهولة وبجودة عالية.",
+        "👋 **أهلاً بك يا مروان في بوت التحميل الشامل A-TOOLS X!** 📥\n\n"
+        "أرسل لي رابط أي فيديو أو صوت، وسأتيح لك تحميله بجودة عالية أو برابط مباشر لو الحجم كبير.",
         reply_markup=markup,
         parse_mode="Markdown"
     )
@@ -53,13 +53,12 @@ def callback_query(call):
     except:
         pass
 
-    # إعدادات متقدمة تمنع قطع الاتصال وتزيد مهلة الانتظار (Timeout)
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        'socket_timeout': 60,  # زيادة مهلة انتظار السيرفر إلى 60 ثانية لمنع انتهاء الوقت
-        'retries': 10,         # محاولة إعادة الاتصال تلقائياً حتى 10 مرات لو حصل قطع
+        'socket_timeout': 60,
+        'retries': 10,
     }
 
     if action == "video":
@@ -80,7 +79,6 @@ def callback_query(call):
         # فحص حجم الملف (حد تيليجرام 50 ميجا)
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
         
-        # لو الملف حجمه تجاوز الحد الأقصى، نقدم زر تحميل مباشر منسق وشيك
         if file_size_mb > 48:
             if file_path and os.path.exists(file_path):
                 os.remove(file_path)
@@ -106,7 +104,6 @@ def callback_query(call):
             )
             return
 
-        # لو حجمه طبيعي وأقل من 50 ميجا، يتم إرساله مباشرة
         try:
             bot.edit_message_text(
                 chat_id=call.message.chat.id,
@@ -119,9 +116,9 @@ def callback_query(call):
         
         with open(file_path, 'rb') as f:
             if action == "audio":
-                bot.send_audio(call.message.chat.id, f, caption=f"🎵 **{video_title}**\n✅ تم التحميل بنجاح بواسطة البوت", parse_mode="Markdown")
+                bot.send_audio(call.message.chat.id, f, caption=f"🎵 **{video_title}**\n✅ تم التحميل بنجاح بواسطة A-TOOLS X", parse_mode="Markdown")
             else:
-                bot.send_video(call.message.chat.id, f, caption=f"🎬 **{video_title} (HD)**\n✅ تم التحميل بنجاح بواسطة البوت", parse_mode="Markdown")
+                bot.send_video(call.message.chat.id, f, caption=f"🎬 **{video_title} (HD)**\n✅ تم التحميل بنجاح بواسطة A-TOOLS X", parse_mode="Markdown")
 
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
@@ -144,5 +141,5 @@ def callback_query(call):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 البوت يعمل بكفاءة مع نظام مهلة الاتصال المحسنة...")
+print("🤖 A-TOOLS X يعمل الآن بكفاءة وبدون أي شروط اشتراك...")
 bot.infinity_polling()
