@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>قص الفيديو</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #111111);
+    --hint: var(--tg-theme-hint-color, #8a8a8e);
+    --card: var(--tg-theme-secondary-bg-color, #f2f2f7);
+    --btn: var(--tg-theme-button-color, #2481cc);
+    --btn-text: var(--tg-theme-button-text-color, #ffffff);
+    --danger: #e5484d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", Tahoma, sans-serif; }
+  body { padding: 12px 14px 24px; min-height: 100vh; }
+  .hidden { display: none !important; }
+
+  /* شاشة التحميل / الخطأ */
+  .center { min-height: 80vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; gap: 14px; }
+  .spinner { width: 46px; height: 46px; border-radius: 50%;
+    border: 4px solid var(--card); border-top-color: var(--btn);
+    animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hint { color: var(--hint); font-size: 14px; line-height: 1.6; }
+  .err { color: var(--danger); font-size: 15px; line-height: 1.6; }
+
+  /* الفيديو */
+  video { width: 100%; max-height: 38vh; background: #000; border-radius: 14px; display: block; }
+  #title { margin: 10px 2px 2px; font-size: 14px; color: var(--hint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* السلايدر */
+  .slider { direction: ltr; padding: 26px 16px 8px; user-select: none; -webkit-user-select: none; }
+  .track { position: relative; height: 10px; border-radius: 6px; background: var(--card);
+    box-shadow: inset 0 0 0 1px rgba(128,128,128,.25); }
+  .fill { position: absolute; top: 0; bottom: 0; background: var(--btn); border-radius: 6px; opacity: .85; }
+  .playhead { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--text);
+    opacity: .55; border-radius: 1px; pointer-events: none; }
+  .thumb { position: absolute; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+    border-radius: 50%; background: #fff; border: 4px solid var(--btn);
+    box-shadow: 0 2px 6px rgba(0,0,0,.3); touch-action: none; cursor: grab; z-index: 2; }
+  .thumb::before { content: ""; position: absolute; inset: -12px; }
+  .thumb.drag { transform: scale(1.18); }
+  #tE { border-color: var(--danger); }
+  .scale { direction: ltr; display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--hint); padding: 8px 12px 0; }
+
+  /* مربعات الوقت */
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .box { background: var(--card); border-radius: 14px; padding: 10px 10px 12px; text-align: center; }
+  .lbl { font-size: 13px; color: var(--hint); }
+  .val { font-size: 26px; font-weight: 700; margin: 2px 0 8px; direction: ltr; }
+  .mini { display: flex; gap: 6px; justify-content: center; }
+  .mini button { flex: 1; border: 0; border-radius: 10px; padding: 9px 4px; font-size: 14px;
+    background: var(--bg); color: var(--text); }
+  .mini button:active { opacity: .6; }
+
+  button.ghost { width: 100%; margin-top: 12px; padding: 13px; border: 0; border-radius: 14px;
+    font-size: 16px; background: var(--card); color: var(--text); }
+  button.primary { width: 100%; margin-top: 12px; padding: 15px; border: 0; border-radius: 14px;
+    font-size: 17px; font-weight: 700; background: var(--btn); color: var(--btn-text); }
+  button:disabled { opacity: .55; }
+  #info { margin-top: 12px; text-align: center; font-size: 14px; color: var(--hint); line-height: 1.6; }
+  #formErr { color: var(--danger); text-align: center; margin-top: 8px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- تحميل -->
+<div id="loading" class="center">
+  <div class="spinner"></div>
+  <div><b>جاري تجهيز الفيديو...</b></div>
+  <div class="hint">قد يستغرق الأمر من بضع ثوانٍ إلى دقيقة حسب حجم الفيديو</div>
+</div>
+
+<!-- خطأ -->
+<div id="failed" class="center hidden">
+  <div style="font-size:42px">😕</div>
+  <div class="err" id="failMsg"></div>
+</div>
+
+<!-- الواجهة الرئيسية -->
+<div id="main" class="hidden">
+  <video id="video" playsinline preload="metadata" controls></video>
+  <div id="title"></div>
+
+  <div class="slider" id="slider">
+    <div class="track" id="track">
+      <div class="fill" id="fill"></div>
+      <div class="playhead" id="playhead"></div>
+      <div class="thumb" id="tS"></div>
+      <div class="thumb" id="tE"></div>
+    </div>
+  </div>
+  <div class="scale"><span>0:00</span><span id="total">0:00</span></div>
+
+  <div class="row">
+    <div class="box">
+      <div class="lbl">🟢 البداية</div>
+      <div class="val" id="vS">0:00</div>
+      <div class="mini">
+        <button id="sM">−1ث</button>
+        <button id="sP">+1ث</button>
+        <button id="sH">📍 هنا</button>
+      </div>
+    </div>
+    <div class="box">
+      <div class="lbl">🔴 النهاية</div>
+      <div class="val" id="vE">0:00</div>
+      <div class="mini">
+        <button id="eM">−1ث</button>
+        <button id="eP">+1ث</button>
+        <button id="eH">📍 هنا</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="ghost" id="preview">▶ معاينة المقطع</button>
+  <div id="info"></div>
+  <button class="primary" id="go">✂️ قص وإرسال</button>
+  <div id="formErr"></div>
+</div>
+
+<script>
+(function () {
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const $ = (id) => document.getElementById(id);
+  const key = new URLSearchParams(location.search).get('k');
+  const video = $('video'), track = $('track');
+
+  let dur = 0, start = 0, end = 0, previewing = false, uiStarted = false;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  function fmt(t) {
+    t = Math.max(0, Math.round(t));
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  }
+
+  async function post(url, body) {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Init-Data': tg ? tg.initData : '' },
+      body: JSON.stringify(body),
+    });
+    let j = {};
+    try { j = await r.json(); } catch (e) {}
+    j.httpStatus = r.status;
+    return j;
+  }
+
+  function fail(msg) {
+    $('loading').classList.add('hidden');
+    $('main').classList.add('hidden');
+    $('failMsg').textContent = msg;
+    $('failed').classList.remove('hidden');
+  }
+
+  /* ---------- ضبط القيم ---------- */
+  function setStart(t) {
+    t = Math.round(t);
+    t = Math.min(t, end - 1);
+    start = Math.max(0, t);
+  }
+  function setEnd(t) {
+    t = Math.round(t);
+    if (dur - t < 1) t = dur;          // الالتصاق بنهاية الفيديو
+    t = Math.min(t, dur);
+    end = Math.max(t, start + 1);
+  }
+  function seek(t) {
+    try { video.currentTime = t; } catch (e) {}
+  }
+
+  function render() {
+    const pS = (start / dur) * 100, pE = (end / dur) * 100;
+    $('tS').style.left = pS + '%';
+    $('tE').style.left = pE + '%';
+    $('fill').style.left = pS + '%';
+    $('fill').style.width = (pE - pS) + '%';
+    $('vS').textContent = fmt(start);
+    $('vE').textContent = fmt(end);
+    const len = end - start;
+    let info = `مدة المقطع: <b>${fmt(len)}</b>`;
+    if (len > 600) info += '<br>المقاطع الطويلة تُضغط تلقائياً لتناسب حد تيليجرام (50MB)';
+    $('info').innerHTML = info;
+  }
+
+  /* ---------- السحب ---------- */
+  function bindThumb(el, which) {
+    el.addEventListener('pointerdown', (e) => {
+      el.setPointerCapture(e.pointerId);
+      el.classList.add('drag');
+      e.preventDefault();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!el.hasPointerCapture(e.pointerId)) return;
+      const r = track.getBoundingClientRect();
+      let t = ((e.clientX - r.left) / r.width) * dur;
+      t = Math.min(Math.max(t, 0), dur);
+      if (which === 's') { setStart(t); seek(start); }
+      else { setEnd(t); seek(end); }
+      render();
+    });
+    const up = () => el.classList.remove('drag');
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  }
+
+  /* ---------- الأزرار ---------- */
+  function bindButtons() {
+    $('sM').onclick = () => { setStart(start - 1); seek(start); render(); };
+    $('sP').onclick = () => { setStart(start + 1); seek(start); render(); };
+    $('eM').onclick = () => { setEnd(end - 1); seek(end); render(); };
+    $('eP').onclick = () => { setEnd(end + 1); seek(end); render(); };
+    $('sH').onclick = () => { setStart(video.currentTime || 0); render(); };
+    $('eH').onclick = () => { setEnd(video.currentTime || 0); render(); };
+
+    $('preview').onclick = () => {
+      if (previewing) { video.pause(); return; }
+      seek(start);
+      previewing = true;
+      $('preview').textContent = '⏸ إيقاف المعاينة';
+      const p = video.play();
+      if (p && p.catch) p.catch(() => { previewing = false; updatePreviewBtn(); });
+    };
+
+    $('go').onclick = async () => {
+      const b = $('go');
+      $('formErr').textContent = '';
+      b.disabled = true;
+      b.textContent = '⏳ جاري الإرسال...';
+      try {
+        const r = await post('/api/trim', { key: key, start: start, end: end });
+        if (r.ok) {
+          b.textContent = '✅ تم! ستصلك النتيجة في المحادثة';
+          setTimeout(() => { if (tg) tg.close(); }, 900);
+          return;
+        }
+        throw new Error(r.error || 'error');
+      } catch (e) {
+        b.disabled = false;
+        b.textContent = '✂️ قص وإرسال';
+        $('formErr').textContent = 'تعذّر بدء القص، حاول مرة أخرى.';
+      }
+    };
+  }
+
+  function updatePreviewBtn() {
+    $('preview').textContent = previewing ? '⏸ إيقاف المعاينة' : '▶ معاينة المقطع';
+  }
+
+  video.addEventListener('timeupdate', () => {
+    if (dur) $('playhead').style.left = (video.currentTime / dur) * 100 + '%';
+    if (previewing && video.currentTime >= end) { video.pause(); }
+  });
+  video.addEventListener('pause', () => { previewing = false; updatePreviewBtn(); });
+
+  /* ---------- بدء الواجهة ---------- */
+  function startUI(info) {
+    if (uiStarted) return;
+    const d = (isFinite(video.duration) && video.duration > 0) ? video.duration : info.duration;
+    if (!d) return fail('تعذّر معرفة مدة الفيديو.');
+    uiStarted = true;
+    dur = d;
+    start = 0;
+    end = Math.min(dur, 60);
+    if (end < 1) end = dur;
+    $('title').textContent = info.title || '';
+    $('total').textContent = fmt(dur);
+    bindThumb($('tS'), 's');
+    bindThumb($('tE'), 'e');
+    bindButtons();
+    $('loading').classList.add('hidden');
+    $('main').classList.remove('hidden');
+    render();
+  }
+
+  function ready(info) {
+    video.addEventListener('loadedmetadata', () => startUI(info), { once: true });
+    video.addEventListener('error', () => {
+      // المعاينة غير مدعومة (صيغة الفيديو) لكن القص ما زال ممكناً بالأزرار
+      startUI(info);
+      $('formErr').textContent = 'المعاينة غير مدعومة لهذا الفيديو، استخدم الأزرار لضبط الوقت.';
+    }, { once: true });
+    video.src = '/media/' + encodeURIComponent(key);
+    video.load();
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch('/api/status?k=' + encodeURIComponent(key));
+      const j = await r.json();
+      if (j.state === 'ready') return ready(j);
+      if (j.state === 'error') return fail(j.error || 'حدث خطأ أثناء تحميل الفيديو.');
+      if (j.state === 'expired') return fail('انتهت صلاحية الطلب. أرسل الرابط للبوت مرة أخرى.');
+    } catch (e) { /* نعيد المحاولة */ }
+    setTimeout(poll, 1500);
+  }
+
+  async function init() {
+    if (!key) return fail('رابط غير صالح.');
+    const r = await post('/api/prepare', { key: key });
+    if (!r.ok) return fail('تعذّر فتح الطلب. افتح الصفحة من داخل تيليجرام أو أرسل الرابط للبوت مرة أخرى.');
+    poll();
+  }
+  init();
+})();
+</script>
+</body>
+</html>
