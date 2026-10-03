@@ -38,6 +38,10 @@ MAX_TRIM_SOURCE_SEC = 2 * 3600  # أقصى مدة للفيديو الأصلي ع
 MAX_PREVIEW_BYTES = 1_500_000_000
 JOB_TTL = 45 * 60               # صلاحية الطلب (بالثواني)
 
+# كوكيز يوتيوب (اختياري): محتوى ملف cookies.txt مشفّر base64 في متغير YT_COOKIES_B64
+COOKIES_B64 = os.getenv("YT_COOKIES_B64", "")
+COOKIES_PATH = os.path.join(BASE_DIR, "cookies.txt")
+
 # الطلبات: key -> {url, user_id, chat_id, state, ts, path, title, duration, direct, error}
 # state: new | downloading | ready | processing | error
 jobs = {}
@@ -122,6 +126,13 @@ def verify_init_data(init_data, max_age=86400):
 # ------------------------------------------------------------------
 # التحميل
 # ------------------------------------------------------------------
+def ydl_base_opts():
+    opts = {'noplaylist': True, 'quiet': True}
+    if os.path.exists(COOKIES_PATH):
+        opts['cookiefile'] = COOKIES_PATH
+    return opts
+
+
 def download_media(url, action, max_bytes=None):
     """يحمّل الملف ويرجع (المسار، العنوان، المدة، الرابط المباشر)."""
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -130,11 +141,12 @@ def download_media(url, action, max_bytes=None):
     opts = {
         'outtmpl': f'{DOWNLOAD_DIR}/{token}_%(id)s.%(ext)s',
         'noplaylist': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         'socket_timeout': 60,
         'retries': 10,
         'merge_output_format': 'mp4',
     }
+    if os.path.exists(COOKIES_PATH):
+        opts['cookiefile'] = COOKIES_PATH
     if max_bytes:
         opts['max_filesize'] = max_bytes
 
@@ -343,7 +355,7 @@ def process_request(chat_id, msg_id, url, action, trim=None):
     file_path = None
     try:
         if trim:
-            with yt_dlp.YoutubeDL({'noplaylist': True, 'quiet': True}) as ydl:
+            with yt_dlp.YoutubeDL(ydl_base_opts()) as ydl:
                 meta = ydl.extract_info(url, download=False)
             total = meta.get('duration')
             start, end = trim
@@ -388,7 +400,7 @@ def prepare_job(key):
     if not job:
         return
     try:
-        with yt_dlp.YoutubeDL({'noplaylist': True, 'quiet': True}) as ydl:
+        with yt_dlp.YoutubeDL(ydl_base_opts()) as ydl:
             meta = ydl.extract_info(job['url'], download=False)
         total = meta.get('duration')
         if total and total > MAX_TRIM_SOURCE_SEC:
@@ -620,6 +632,15 @@ def callback_query(call):
 def main():
     shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+    if COOKIES_B64:
+        try:
+            import base64
+            with open(COOKIES_PATH, "wb") as f:
+                f.write(base64.b64decode(COOKIES_B64))
+            print("🍪 تم تحميل ملف الكوكيز", flush=True)
+        except Exception as e:
+            print(f"[ERROR] فشل قراءة YT_COOKIES_B64: {e}", flush=True)
 
     if not os.path.exists(INDEX_PATH):
         print("[WARN] ملف index.html غير موجود بجانب bot.py، الميني اب لن يعمل!", flush=True)
