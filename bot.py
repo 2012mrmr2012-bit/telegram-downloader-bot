@@ -288,7 +288,13 @@ def deliver(chat_id, msg_id, file_path, title, duration, action, direct_url, tri
             safe_remove(file_path)
             file_path = trimmed
             if not trimmed:
-                safe_edit(chat_id, msg_id, "❌ **فشل قص الفيديو.** جرّب توقيت مختلف.")
+                if not shutil.which("ffmpeg"):
+                    safe_edit(chat_id, msg_id,
+                              "❌ **فشل القص: ffmpeg غير مثبت على السيرفر.**\n"
+                              "أضف المتغير `RAILPACK_DEPLOY_APT_PACKAGES=ffmpeg` في Railway.")
+                else:
+                    safe_edit(chat_id, msg_id,
+                              "❌ **فشل قص الفيديو.** تفاصيل الخطأ في logs السيرفر (`[ERROR] ffmpeg`).")
                 return
             duration = trim[1] - trim[0]
             title += f"\n✂️ من {fmt_time(trim[0])} إلى {fmt_time(trim[1])}"
