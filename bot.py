@@ -23,16 +23,13 @@ def ask_quality(message):
     
     markup = InlineKeyboardMarkup()
     markup.row(
-        InlineKeyboardButton("🎬 جودة عالية (HD)", callback_data=f"hd|{url}"),
-        InlineKeyboardButton("📱 جودة متوسطة (SD)", callback_data=f"sd|{url}")
-    )
-    markup.row(
-        InlineKeyboardButton("🎵 صوت فقط (MP3)", callback_data=f"mp3|{url}")
+        InlineKeyboardButton("🎬 فيديو (جودة جاهزة)", callback_data=f"video|{url}"),
+        InlineKeyboardButton("🎵 صوت فقط (MP3/M4A)", callback_data=f"audio|{url}")
     )
     
     bot.reply_to(
         message,
-        "🎯 تم استلام الرابط بنجاح!\nاختر الجودة أو الصيغة التي ترغب في تحميلها:",
+        "🎯 تم استلام الرابط بنجاح!\nاختر الصيغة التي ترغب في تحميلها:",
         reply_markup=markup
     )
 
@@ -40,7 +37,7 @@ def ask_quality(message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     data = call.data
-    quality, url = data.split("|", 1)
+    action, url = data.split("|", 1)
     
     bot.answer_callback_query(call.id, "⏳ جاري التحميل، انتظر قليلاً...")
     try:
@@ -52,22 +49,19 @@ def callback_query(call):
     except:
         pass
 
+    # إعدادات yt-dlp بدون أي حاجة لـ ffmpeg نهائياً
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'noplaylist': True,
-        # ميزة لتجاوز حماية يوتيوب وتأكيد أنك لست روبوت
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
     }
 
-    if quality == "hd" or quality == "sd":
+    if action == "video":
+        # اختيار صيغة فيديو مدمجة جاهزة من يوتيوب لا تحتاج دمج
         ydl_opts['format'] = 'best[ext=mp4]/best'
-    elif quality == "mp3":
-        ydl_opts['format'] = 'bestaudio/best'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }]
+    elif action == "audio":
+        # اختيار أفضل صوت متاح بصيغته الأصلية بدون أي عمليات تحويل تطلب ffmpeg
+        ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
 
     file_path = None
     try:
@@ -76,9 +70,6 @@ def callback_query(call):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
-            
-            if quality == "mp3":
-                file_path = os.path.splitext(file_path)[0] + ".mp3"
 
         try:
             bot.edit_message_text(
@@ -90,7 +81,7 @@ def callback_query(call):
             pass
         
         with open(file_path, 'rb') as f:
-            if quality == "mp3":
+            if action == "audio":
                 bot.send_audio(call.message.chat.id, f, caption="✅ تم تحميل الصوت بنجاح بواسطة البوت")
             else:
                 bot.send_video(call.message.chat.id, f, caption="✅ تم تحميل الفيديو بنجاح بواسطة البوت")
@@ -115,5 +106,5 @@ def callback_query(call):
         if file_path and os.path.exists(file_path):
             os.remove(file_path)
 
-print("🤖 البوت يعمل الآن باستخدام Telebot وبدون أي مشاكل...")
+print("🤖 البوت يعمل الآن بكفاءة وبدون أي حاجة لـ FFmpeg...")
 bot.infinity_polling()
