@@ -562,4 +562,202 @@ def api_trim():
     except Exception:
         return jsonify(ok=False, error="bad_request"), 400
 
-  
+    total = job.get('duration')
+    start = max(0.0, start)
+    if total:
+        end = min(end, float(total))
+    if end - start < 0.5:
+        return jsonify(ok=False, error="bad_range"), 400
+
+    with jobs_lock:
+        if job['state'] != 'ready':
+            return jsonify(ok=False, error="not_ready"), 409
+        job['state'] = 'processing'
+
+    threading.Thread(target=run_trim_job, args=(key, start, end), daemon=True).start()
+    return jsonify(ok=True)
+
+
+def janitor():
+    """ينضف الطلبات القديمة والملفات اللي محدش استخدمها."""
+    while True:
+        time.sleep(300)
+        now = time.time()
+        with jobs_lock:
+            for k, j in list(jobs.items()):
+                if now - j['ts'] > JOB_TTL and j['state'] in ('new', 'ready', 'error'):
+                    safe_remove(j.get('path'))
+                    jobs.pop(k, None)
+
+
+# ------------------------------------------------------------------
+# أوامر البوت
+# ------------------------------------------------------------------
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(
+        message,
+        "👋 **أهلاً بك في بوت Vortex downloader!** 📥\n\n"
+        "أرسل لي رابط أي فيديو أو صوت، وسأتيح لك تحميله بجودة عالية، "
+        "أو قص مقطع معين منه ✂️\n"
+        "ولو الحجم كبير هضغطه تلقائياً.",
+        parse_mode="Markdown"
+    )
+
+
+@bot.message_handler(func=lambda m: m.text and ("http://" in m.text or "https://" in m.text))
+def ask_quality(message):
+    m = URL_RE.search(message.text)
+    url = m.group(0) if m else ""
+    uid = message.from_user.id if message.from_user else 0
+    if not url or not is_safe_url(url):
+        bot.reply_to(message, "❌ الرابط غير صالح.")
+        return
+    if sum(1 for j in list(jobs.values()) if j['user_id'] == uid) >= MAX_JOBS_PER_USER:
+        bot.reply_to(message, "⏳ عندك طلبات كثيرة قيد المعالجة، انتظر لحد ما تخلص.")
+        return
+    key = uuid.uuid4().hex[:16]
+    jobs[key] = {
+        'url': url,
+        'user_id': uid,
+        'chat_id': message.chat.id,
+        'state': 'new',
+        'ts': time.time(),
+    }
+
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("🎬 تحميل فيديو (HD - 720p)", callback_data=f"video|{key}"),
+        InlineKeyboardButton("🎵 تحميل صوت فقط (MP3)", callback_data=f"audio|{key}")
+    )
+    if WEBAPP_URL and message.chat.type == "private":
+        markup.row(InlineKeyboardButton(
+            "✂️ قص مقطع (بالسلايدر)",
+            web_app=WebAppInfo(url=f"{WEBAPP_URL}/app?k={key}")
+        ))
+    else:
+        markup.row(InlineKeyboardButton("✂️ قص مقطع من الفيديو", callback_data=f"trim|{key}"))
+
+    bot.reply_to(
+        message,
+        "🎯 **تم استلام الرابط بنجاح!**\n\nاختر الصيغة التي ترغب بها من الأزرار أدناه:",
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
+
+
+def handle_trim_range(message, key):
+    """بديل نصي للقص (يشتغل لو الميني اب مش مفعّل أو في المجموعات)."""
+    text = (message.text or "").strip()
+
+    if "http://" in text or "https://" in text:
+        ask_quality(message)
+        return
+    if text.startswith("/"):
+        bot.reply_to(message, "تم إلغاء القص.")
+        return
+
+    job = jobs.get(key)
+    if not job:
+        bot.reply_to(message, "⚠️ انتهت صلاحية الطلب، أرسل الرابط مرة أخرى.")
+        return
+
+    rng = parse_range(text)
+    if not rng or rng[0] >= rng[1]:
+        msg = bot.reply_to(
+            message,
+            "❌ **صيغة غير صحيحة.**\nأرسل وقت البداية والنهاية هكذا:\n"
+            "`00:30 01:45`\n(ويجب أن تكون النهاية بعد البداية). أو أرسل /cancel للإلغاء.",
+            parse_mode="Markdown"
+        )
+        bot.register_next_step_handler(msg, handle_trim_range, key)
+        return
+
+    status = bot.reply_to(message, "⏳ **جاري البدء...**", parse_mode="Markdown")
+    try:
+        process_request(message.chat.id, status.message_id, job['url'], "video", trim=rng)
+    finally:
+        jobs.pop(key, None)
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    try:
+        action, key = call.data.split("|", 1)
+    except ValueError:
+        bot.answer_callback_query(call.id, "طلب غير صالح")
+        return
+
+    job = jobs.get(key)
+    if not job:
+        bot.answer_callback_query(call.id, "انتهت صلاحية الطلب، أرسل الرابط مرة أخرى")
+        return
+
+    if action == "trim":
+        bot.answer_callback_query(call.id)
+        msg = bot.send_message(
+            call.message.chat.id,
+            "✂️ **أرسل وقت البداية والنهاية للمقطع الذي تريده:**\n\n"
+            "مثال: `00:30 01:45`\n"
+            "أو: `1:05:00 1:10:30` (ساعة:دقيقة:ثانية)\n"
+            "أو بالثواني: `30 105`\n\n"
+            "لإلغاء القص أرسل /cancel",
+            parse_mode="Markdown"
+        )
+        bot.register_next_step_handler(msg, handle_trim_range, key)
+        return
+
+    if job['state'] != 'new':
+        bot.answer_callback_query(call.id, "هذا الطلب قيد المعالجة حالياً")
+        return
+
+    bot.answer_callback_query(call.id, "⏳ جاري المعالجة والفحص...")
+    job['state'] = 'processing'
+    try:
+        process_request(call.message.chat.id, call.message.message_id, job['url'], action)
+    finally:
+        jobs.pop(key, None)  # الطلب خلص، نحرر مكانه من حد المستخدم
+
+
+# ------------------------------------------------------------------
+# التشغيل
+# ------------------------------------------------------------------
+def main():
+    shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+    if COOKIES_B64:
+        try:
+            import base64
+            with open(COOKIES_PATH, "wb") as f:
+                f.write(base64.b64decode(COOKIES_B64))
+            print("🍪 تم تحميل ملف الكوكيز", flush=True)
+        except Exception as e:
+            print(f"[ERROR] فشل قراءة YT_COOKIES_B64: {e}", flush=True)
+
+    if not shutil.which("ffmpeg"):
+        print("[WARN] ffmpeg غير مثبت: لن يعمل القص ولا الضغط حتى تثبّته (RAILPACK_DEPLOY_APT_PACKAGES=ffmpeg)", flush=True)
+
+    if not shutil.which("deno"):
+        print("[WARN] deno غير مثبت: يوتيوب يحتاج JavaScript runtime (RAILPACK_PACKAGES=deno)", flush=True)
+
+    if not os.path.exists(INDEX_PATH):
+        print("[WARN] ملف index.html غير موجود بجانب bot.py، الميني اب لن يعمل!", flush=True)
+
+    threading.Thread(
+        target=lambda: serve(app, host="0.0.0.0", port=PORT, threads=8),
+        daemon=True
+    ).start()
+    threading.Thread(target=janitor, daemon=True).start()
+
+    if WEBAPP_URL:
+        print(f"🌐 الميني اب مفعّل: {WEBAPP_URL}/app", flush=True)
+    else:
+        print("[WARN] لا يوجد دومين عام، سيُستخدم القص النصي بدل الميني اب.", flush=True)
+
+    print("🤖 Vortex downloader يعمل الآن...", flush=True)
+    bot.infinity_polling()
+
+
+if __name__ == "__main__":
+    main()
