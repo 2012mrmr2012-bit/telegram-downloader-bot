@@ -69,15 +69,35 @@
   button:disabled { opacity: .55; }
   #info { margin-top: 12px; text-align: center; font-size: 14px; color: var(--hint); line-height: 1.6; }
   #formErr { color: var(--danger); text-align: center; margin-top: 8px; font-size: 14px; }
+  #url { width: 100%; margin-top: 18px; padding: 14px; border-radius: 14px; font-size: 16px;
+    border: 1px solid rgba(128,128,128,.35); background: var(--card); color: var(--text); }
 </style>
 </head>
 <body>
 
 <!-- تحميل -->
-<div id="loading" class="center">
+<div id="loading" class="center hidden">
   <div class="spinner"></div>
   <div><b>جاري تجهيز الفيديو...</b></div>
   <div class="hint">قد يستغرق الأمر من بضع ثوانٍ إلى دقيقة حسب حجم الفيديو</div>
+</div>
+
+<!-- الشاشة الرئيسية (عند الفتح من زر Open بدون رابط) -->
+<div id="home" class="hidden">
+  <div style="text-align:center;font-size:44px;margin-top:18px">📥</div>
+  <h2 style="text-align:center;margin:6px 0 4px">Vortex downloader</h2>
+  <div class="hint" style="text-align:center">حمّل فيديو أو صوت، أو قص مقطع من أي رابط</div>
+  <div id="stepUrl">
+    <input id="url" type="url" dir="ltr" placeholder="https://..." autocomplete="off">
+    <button class="ghost" id="paste">📋 لصق من الحافظة</button>
+    <button class="primary" id="next">متابعة</button>
+  </div>
+  <div id="stepPick" class="hidden">
+    <button class="primary" id="pV">🎬 تحميل فيديو (HD)</button>
+    <button class="ghost" id="pA">🎵 تحميل صوت فقط (MP3)</button>
+    <button class="ghost" id="pT">✂️ قص مقطع (بالسلايدر)</button>
+  </div>
+  <div id="homeErr" style="color:var(--danger);text-align:center;margin-top:10px;font-size:14px"></div>
 </div>
 
 <!-- خطأ -->
@@ -134,7 +154,7 @@
   if (tg) { tg.ready(); tg.expand(); }
 
   const $ = (id) => document.getElementById(id);
-  const key = new URLSearchParams(location.search).get('k');
+  let key = new URLSearchParams(location.search).get('k');
   const video = $('video'), track = $('track');
 
   let dur = 0, start = 0, end = 0, previewing = false, uiStarted = false;
@@ -161,6 +181,7 @@
   function fail(msg) {
     $('loading').classList.add('hidden');
     $('main').classList.add('hidden');
+    $('home').classList.add('hidden');
     $('failMsg').textContent = msg;
     $('failed').classList.remove('hidden');
   }
@@ -307,8 +328,8 @@
     setTimeout(poll, 1500);
   }
 
-  async function init() {
-    if (!key) return fail('رابط غير صالح.');
+  async function begin() {
+    $('loading').classList.remove('hidden');
     const r = await post('/api/prepare', { key: key });
     if (!r.ok) {
       const msgs = {
@@ -320,7 +341,51 @@
     }
     poll();
   }
-  init();
+
+  /* ---------- الشاشة الرئيسية ---------- */
+  function startHome() {
+    $('home').classList.remove('hidden');
+    const err = (m) => { $('homeErr').textContent = m || ''; };
+    $('paste').onclick = () => {
+      const put = (t) => { if (t) $('url').value = String(t).trim(); };
+      if (tg && tg.readTextFromClipboard) tg.readTextFromClipboard(put);
+      else if (navigator.clipboard) navigator.clipboard.readText().then(put).catch(() => {});
+    };
+    $('next').onclick = async () => {
+      const url = $('url').value.trim();
+      err('');
+      if (!/^https?:\/\//i.test(url)) return err('الصق رابطاً صحيحاً يبدأ بـ https://');
+      const b = $('next'); b.disabled = true; b.textContent = '⏳ جاري الفحص...';
+      const r = await post('/api/create', { url: url });
+      b.disabled = false; b.textContent = 'متابعة';
+      if (!r.ok) {
+        const m = { bad_url: 'الرابط غير صالح.', too_many: 'عندك طلبات كثيرة قيد المعالجة، انتظر قليلاً.',
+                    bad_signature: 'افتح الصفحة من داخل تيليجرام.' };
+        return err(m[r.error] || 'تعذّر قبول الرابط، حاول مرة أخرى.');
+      }
+      key = r.key;
+      $('stepUrl').classList.add('hidden');
+      $('stepPick').classList.remove('hidden');
+    };
+    const dl = async (action) => {
+      err('');
+      ['pV', 'pA', 'pT'].forEach((i) => { $(i).disabled = true; });
+      const r = await post('/api/download', { key: key, action: action });
+      if (r.ok) {
+        $('stepPick').innerHTML = '<div class="center"><div style="font-size:42px">✅</div>' +
+          '<div><b>تم! ستصلك النتيجة في المحادثة</b></div></div>';
+        setTimeout(() => { if (tg) tg.close(); }, 1200);
+      } else {
+        ['pV', 'pA', 'pT'].forEach((i) => { $(i).disabled = false; });
+        err('تعذّر بدء التحميل، حاول مرة أخرى.');
+      }
+    };
+    $('pV').onclick = () => dl('video');
+    $('pA').onclick = () => dl('audio');
+    $('pT').onclick = () => { $('home').classList.add('hidden'); begin(); };
+  }
+
+  if (key) begin(); else startHome();
 })();
 </script>
 </body>

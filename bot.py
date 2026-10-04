@@ -242,6 +242,8 @@ def trim_video(input_path, start, end):
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
         "-threads", "2", "-x264-params", "rc-lookahead=0:sync-lookahead=0",
         "-pix_fmt", "yuv420p",
+        "-fps_mode", "cfr",                       # يثبّت معدل الإطارات (فيسبوك/تيك توك غالباً VFR)
+        "-af", "aresample=async=1:first_pts=0",   # يضبط الصوت على الصورة
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "+faststart",
         output_path,
@@ -517,6 +519,56 @@ def mini_app():
     resp = send_file(INDEX_PATH, mimetype="text/html")
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+@app.post("/api/create")
+def api_create():
+    """ينشئ طلباً جديداً من الميني اب (عند الفتح من زر Open بدون رابط)."""
+    data = request.get_json(silent=True) or {}
+    user = verify_init_data(request.headers.get("X-Init-Data", ""))
+    if not user:
+        return jsonify(ok=False, error="bad_signature"), 403
+    m = URL_RE.search(str(data.get("url", "")))
+    url = m.group(0) if m else ""
+    if not url or not is_safe_url(url):
+        return jsonify(ok=False, error="bad_url"), 400
+    uid = user["id"]
+    if sum(1 for j in list(jobs.values()) if j['user_id'] == uid) >= MAX_JOBS_PER_USER:
+        return jsonify(ok=False, error="too_many"), 429
+    key = uuid.uuid4().hex[:16]
+    jobs[key] = {'url': url, 'user_id': uid, 'chat_id': uid,
+                 'state': 'new', 'ts': time.time()}
+    return jsonify(ok=True, key=key)
+
+
+def run_download_job(key, action):
+    job = jobs.get(key)
+    if not job:
+        return
+    try:
+        status = bot.send_message(job['chat_id'], "⏳ **جاري جلب الملف ومعالجة البيانات...**",
+                                  parse_mode="Markdown")
+        process_request(job['chat_id'], status.message_id, job['url'], action)
+    except Exception as e:
+        print(f"[ERROR] run_download_job: {e}", flush=True)
+    finally:
+        jobs.pop(key, None)
+
+
+@app.post("/api/download")
+def api_download():
+    job, key, data, reason = auth_job()
+    if not job:
+        return jsonify(ok=False, error=reason), 403
+    action = data.get("action")
+    if action not in ("video", "audio"):
+        return jsonify(ok=False, error="bad_request"), 400
+    with jobs_lock:
+        if job['state'] != 'new':
+            return jsonify(ok=False, error="busy"), 409
+        job['state'] = 'processing'
+    threading.Thread(target=run_download_job, args=(key, action), daemon=True).start()
+    return jsonify(ok=True)
 
 
 @app.post("/api/prepare")
