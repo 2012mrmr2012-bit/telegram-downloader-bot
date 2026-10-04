@@ -10,6 +10,7 @@ import threading
 import subprocess
 import urllib.parse
 import socket
+import secrets
 import ipaddress
 
 import telebot
@@ -39,6 +40,8 @@ MAX_FINAL_MB = 49               # أي ملف بعد الضغط أكبر من ك
 MAX_TRIM_SOURCE_SEC = 2 * 3600  # أقصى مدة للفيديو الأصلي عند القص (ساعتين)
 MAX_PREVIEW_BYTES = 1_500_000_000
 JOB_TTL = 45 * 60               # صلاحية الطلب (بالثواني)
+LINK_TTL = int(os.getenv("LINK_TTL_MIN", "60")) * 60      # صلاحية رابط التحميل المباشر
+LINK_MAX_MB = int(os.getenv("LINK_MAX_MB", "1500"))        # أقصى حجم نسمح بتحميله للرابط المباشر
 
 # كوكيز يوتيوب (اختياري): محتوى ملف cookies.txt مشفّر base64 في متغير YT_COOKIES_B64
 COOKIES_B64 = os.getenv("YT_COOKIES_B64", "")
@@ -50,6 +53,10 @@ YT_PROXY = os.getenv("YT_PROXY", "")
 # state: new | downloading | ready | processing | error
 jobs = {}
 jobs_lock = threading.Lock()
+
+# روابط التحميل المباشر: token -> {path, name, exp}
+links = {}
+links_lock = threading.Lock()
 
 # أقصى عدد عمليات ثقيلة (تحميل/قص/ضغط) في نفس الوقت، عشان ما تنفد الذاكرة/القرص
 heavy = threading.BoundedSemaphore(int(os.getenv("MAX_PARALLEL", "2")))
@@ -336,6 +343,7 @@ def compress_audio(input_path, duration, target_mb=TARGET_MB):
 # التسليم: قص ← ضغط ← إرسال (ويمسح الملف في الآخر)
 # ------------------------------------------------------------------
 def deliver(chat_id, msg_id, file_path, title, duration, action, direct_url, trim=None):
+    keep = False   # True لما الملف يتحفظ لرابط التحميل المباشر
     try:
         if trim:
             safe_edit(chat_id, msg_id, "✂️ **جاري قص الفيديو...**")
@@ -356,7 +364,26 @@ def deliver(chat_id, msg_id, file_path, title, duration, action, direct_url, tri
 
         file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
 
-        # --- الضغط لو أكبر من الحد ---
+        # --- أكبر من حد تيليجرام → رابط تحميل مباشر من السيرفر ---
+        if file_size_mb > SEND_LIMIT_MB and WEBAPP_URL:
+            token = secrets.token_urlsafe(16)
+            ext = os.path.splitext(file_path)[1] or (".mp3" if action == "audio" else ".mp4")
+            base = re.sub(r'[\\/:*?"<>|\r\n]+', ' ', title.split("\n")[0]).strip()[:80] or "file"
+            with links_lock:
+                links[token] = {'path': file_path, 'name': base + ext, 'exp': time.time() + LINK_TTL}
+            keep = True
+            kind = "الصوت" if action == "audio" else "الفيديو"
+            markup_link = InlineKeyboardMarkup()
+            markup_link.row(InlineKeyboardButton(f"📥 تحميل {kind} مباشرة", url=f"{WEBAPP_URL}/dl/{token}"))
+            safe_edit(
+                chat_id, msg_id,
+                f"⚠️ **حجم {kind} كبير ({file_size_mb:.1f}MB)** ويتجاوز حد تيليجرام (50MB).\n\n"
+                f"✨ **تم تجهيز رابط تحميل مباشر، صالح لمدة {LINK_TTL // 60} دقيقة:**",
+                markup_link
+            )
+            return
+
+        # --- بدون دومين عام: نضغط الملف كحل بديل ---
         if file_size_mb > SEND_LIMIT_MB:
             safe_edit(chat_id, msg_id, "🗜️ **الملف كبير، جاري ضغطه ليناسب تيليجرام... قد يستغرق دقائق**")
             if action == "video":
@@ -368,30 +395,9 @@ def deliver(chat_id, msg_id, file_path, title, duration, action, direct_url, tri
                 file_path = compressed
                 file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
 
-        # --- لو لسه كبير → رابط مباشر (لا يصلح للمقاطع المقصوصة) ---
         if file_size_mb > SEND_LIMIT_MB:
-            if trim:
-                safe_edit(chat_id, msg_id,
-                          f"⚠️ **المقطع بعد القص كبير جداً ({file_size_mb:.1f}MB)** ولم أتمكن من ضغطه.\n"
-                          f"جرّب مدة أقصر.")
-                return
-
-            markup_link = InlineKeyboardMarkup()
-            if action == "video":
-                markup_link.row(InlineKeyboardButton("📥 🎬 تحميل الفيديو مباشرة (HD)", url=direct_url))
-                file_type_text = "الفيديو"
-            else:
-                markup_link.row(InlineKeyboardButton("📥 🎵 تحميل الصوت مباشرة", url=direct_url))
-                file_type_text = "الصوت"
-
-            safe_edit(
-                chat_id, msg_id,
-                f"⚠️ **عذراً، حجم {file_type_text} كبير جداً ({file_size_mb:.1f}MB)**\n"
-                f"ويتجاوز الحد الأقصى المسموح به في تيليجرام (50MB) "
-                f"ولم أتمكن من ضغطه بجودة مقبولة.\n\n"
-                f"✨ **تم توفير زر التحميل المباشر أدناه:**",
-                markup_link
-            )
+            safe_edit(chat_id, msg_id,
+                      f"⚠️ **الملف كبير جداً ({file_size_mb:.1f}MB)** ولم أتمكن من ضغطه.")
             return
 
         safe_edit(chat_id, msg_id, "📤 **جاري إرسال الملف إليك، يرجى الانتظار...**")
@@ -412,7 +418,8 @@ def deliver(chat_id, msg_id, file_path, title, duration, action, direct_url, tri
     except Exception as e:
         safe_edit(chat_id, msg_id, f"❌ **حدث خطأ أثناء المعالجة:**\n`{str(e)[:300]}`")
     finally:
-        safe_remove(file_path)
+        if not keep:
+            safe_remove(file_path)
 
 
 def process_request(chat_id, msg_id, url, action, trim=None):
@@ -437,7 +444,7 @@ def process_request(chat_id, msg_id, url, action, trim=None):
             trim = (start, end)
 
         safe_edit(chat_id, msg_id, "⏳ **جاري جلب الملف ومعالجة البيانات، انتظر قليلاً...**")
-        file_path, title, duration, direct = download_media(url, action)
+        file_path, title, duration, direct = download_media(url, action, max_bytes=LINK_MAX_MB * 1024 * 1024)
         deliver(chat_id, msg_id, file_path, title, duration, action, direct, trim)
     except Exception as e:
         safe_edit(chat_id, msg_id, f"❌ **حدث خطأ أثناء المعالجة:**\n`{str(e)[:300]}`")
@@ -594,6 +601,15 @@ def api_status():
                    title=job.get('title'), error=job.get('error'))
 
 
+@app.get("/dl/<token>")
+def direct_download(token):
+    with links_lock:
+        l = links.get(token)
+    if not l or time.time() > l['exp'] or not os.path.exists(l['path']):
+        return "انتهت صلاحية الرابط، أرسل الرابط للبوت مرة أخرى.", 410
+    return send_file(l['path'], as_attachment=True, download_name=l['name'], conditional=True)
+
+
 @app.get("/media/<key>")
 def media(key):
     job = jobs.get(key)
@@ -635,6 +651,11 @@ def janitor():
     while True:
         time.sleep(300)
         now = time.time()
+        with links_lock:
+            for t, l in list(links.items()):
+                if now > l['exp']:
+                    safe_remove(l['path'])
+                    links.pop(t, None)
         with jobs_lock:
             for k, j in list(jobs.items()):
                 if now - j['ts'] > JOB_TTL and j['state'] in ('new', 'ready', 'error'):
