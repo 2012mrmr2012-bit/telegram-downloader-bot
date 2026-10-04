@@ -3,470 +3,156 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Vortex Downloader - قص وتحميل الفيديو</title>
+<title>قص الفيديو</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg-gradient-start: var(--tg-theme-bg-color, #0f172a);
-    --bg-gradient-end: #090d16;
-    --text-primary: var(--tg-theme-text-color, #f8fafc);
-    --text-muted: var(--tg-theme-hint-color, #94a3b8);
-    
-    --card-bg: rgba(30, 41, 59, 0.7);
-    --card-border: rgba(255, 255, 255, 0.08);
-    --card-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-    
-    --accent-blue: #3b82f6;
-    --accent-glow: rgba(59, 130, 246, 0.35);
-    --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%);
-    --accent-gradient-hover: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-    
-    --danger-red: #ef4444;
-    --danger-gradient: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
-    
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-border: rgba(255, 255, 255, 0.06);
-    --radius-xl: 20px;
-    --radius-lg: 14px;
-    --radius-md: 10px;
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #14151a);
+    --hint: var(--tg-theme-hint-color, #7c8091);
+    --card: var(--tg-theme-secondary-bg-color, #f3f4f8);
+    --acc: #5b5bf0;          /* البداية والأزرار */
+    --acc-text: #ffffff;
+    --end: #f0476b;          /* النهاية */
+    --line: rgba(128,128,140,.22);
+    --danger: #e5484d;
+    --r: 16px;
   }
-
-  * { 
-    box-sizing: border-box; 
-    -webkit-tap-highlight-color: transparent; 
-    outline: none;
-  }
-
-  html, body { 
-    margin: 0; 
-    padding: 0;
-    background: var(--bg-gradient-end);
-    background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #090d16 100%);
-    color: var(--text-primary);
-    font-family: 'Tajawal', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; 
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  body { 
-    padding: 16px 16px 28px; 
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    max-width: 480px;
-    margin: 0 auto;
-  }
-
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "IBM Plex Sans Arabic", -apple-system, "Segoe UI", Tahoma, sans-serif; }
+  body { padding: 14px 16px 28px; min-height: 100vh; line-height: 1.55; }
   .hidden { display: none !important; }
+  button { font-family: inherit; cursor: pointer; transition: transform .12s, opacity .12s; }
+  button:active:not(:disabled) { transform: scale(.975); }
+  button:disabled { opacity: .5; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 
-  /* Animations */
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(12px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
-  }
-
-  @keyframes pulseGlow {
-    0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
-    50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.5); }
-  }
-
-  /* Status Screens */
-  .center { 
-    min-height: 75vh; 
-    display: flex; 
-    flex-direction: column;
-    align-items: center; 
-    justify-content: center; 
-    text-align: center; 
-    gap: 16px; 
-    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .spinner-wrapper {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .spinner { 
-    width: 56px; 
-    height: 56px; 
-    border-radius: 50%;
-    border: 3.5px solid rgba(255, 255, 255, 0.08); 
-    border-top-color: var(--accent-blue);
-    animation: spin 0.8s cubic-bezier(0.6, 0.2, 0.1, 0.8) infinite; 
-  }
-
+  /* حالات التحميل والخطأ */
+  .center { min-height: 78vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 0 12px; }
+  .spinner { width: 44px; height: 44px; border-radius: 50%;
+    border: 3px solid var(--line); border-top-color: var(--acc); animation: spin .9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  .hint { color: var(--hint); font-size: 14px; }
+  .err { color: var(--danger); font-size: 15px; }
 
-  .hint { color: var(--text-muted); font-size: 14px; line-height: 1.6; font-weight: 500; }
-  .err { color: #f87171; font-size: 15px; line-height: 1.6; font-weight: 600; }
+  /* الرئيسية */
+  .brand { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 26px 0 22px; text-align: center; }
+  .logo { width: 62px; height: 62px; border-radius: 20px; background: var(--acc); color: var(--acc-text);
+    display: grid; place-items: center; }
+  .brand h2 { margin: 4px 0 0; font-size: 24px; font-weight: 700; letter-spacing: -.2px; }
+  #url { width: 100%; padding: 15px 16px; border-radius: var(--r); font: inherit; font-size: 16px;
+    border: 1.5px solid var(--line); background: var(--card); color: var(--text); }
+  #url:focus { border-color: var(--acc); outline: none; }
+  #pick-title { font-size: 14px; color: var(--hint); margin: 4px 2px 12px; word-break: break-all; }
 
-  /* Media Player Container */
-  .player-card {
-    background: var(--card-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius-xl);
-    padding: 12px;
-    box-shadow: var(--card-shadow);
-    margin-bottom: 16px;
-  }
+  button.primary, button.ghost, button.opt { width: 100%; margin-top: 10px; border: 0; border-radius: var(--r); }
+  button.primary { padding: 15px; font-size: 17px; font-weight: 700; background: var(--acc); color: var(--acc-text); }
+  button.ghost { padding: 13px; font-size: 15px; font-weight: 500; background: var(--card); color: var(--text); }
+  button.opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; text-align: right;
+    background: var(--card); color: var(--text); font-size: 16px; font-weight: 600; border: 1.5px solid transparent; }
+  button.opt small { display: block; font-size: 12.5px; font-weight: 400; color: var(--hint); }
+  button.opt .ic { font-size: 24px; width: 40px; height: 40px; border-radius: 12px; background: var(--bg);
+    display: grid; place-items: center; flex: none; }
+  button.opt:hover { border-color: var(--acc); }
 
-  video { 
-    width: 100%; 
-    max-height: 36vh; 
-    background: #000; 
-    border-radius: var(--radius-lg); 
-    display: block; 
-    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-    object-fit: contain;
-  }
+  /* المحرر */
+  video { width: 100%; max-height: 38vh; background: #000; border-radius: var(--r); display: block; }
+  #title { margin: 10px 2px 0; font-size: 13px; color: var(--hint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  #title { 
-    margin: 12px 6px 4px; 
-    font-size: 14px; 
-    font-weight: 700;
-    color: var(--text-primary);
-    white-space: nowrap; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-  }
+  /* شريط القص: شريط فيلم، المنطقة المختارة مضاءة والباقي معتّم */
+  .slider { direction: ltr; padding: 20px 14px 4px; user-select: none; -webkit-user-select: none; }
+  .track { position: relative; height: 52px; border-radius: 10px; background: var(--card);
+    background-image: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 12px);
+    box-shadow: inset 0 0 0 1px var(--line); }
+  .fill { position: absolute; top: 0; bottom: 0; background: rgba(91,91,240,.22);
+    border-top: 3px solid var(--acc); border-bottom: 3px solid var(--end); }
+  .playhead { position: absolute; top: -7px; bottom: -7px; width: 2px; background: var(--text);
+    opacity: .7; border-radius: 1px; pointer-events: none; z-index: 1; }
+  .thumb { position: absolute; top: -5px; bottom: -5px; width: 16px; margin-left: -8px; z-index: 2;
+    border-radius: 7px; background: var(--acc); touch-action: none; cursor: grab;
+    display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
+  .thumb::after { content: ""; width: 2px; height: 18px; border-radius: 1px; background: rgba(255,255,255,.85); }
+  .thumb::before { content: ""; position: absolute; inset: -6px -14px; }
+  .thumb.drag { transform: scaleX(1.25); }
+  #tE { background: var(--end); }
+  .scale { direction: ltr; display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--hint); padding: 8px 14px 0; }
 
-  /* Slider UI */
-  .slider-box {
-    background: var(--card-bg);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius-xl);
-    padding: 18px 16px 12px;
-    box-shadow: var(--card-shadow);
-    margin-bottom: 16px;
-  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .box { background: var(--card); border-radius: var(--r); padding: 12px 10px; text-align: center; }
+  .box.s { border-top: 3px solid var(--acc); }
+  .box.e { border-top: 3px solid var(--end); }
+  .lbl { font-size: 13px; color: var(--hint); font-weight: 500; }
+  .val { font-size: 28px; font-weight: 700; margin: 0 0 8px; direction: ltr; font-variant-numeric: tabular-nums; }
+  .mini { display: flex; gap: 6px; }
+  .mini button { flex: 1; border: 0; border-radius: 10px; padding: 9px 2px; font-size: 13px;
+    background: var(--bg); color: var(--text); }
+  #info { margin-top: 14px; text-align: center; font-size: 14px; color: var(--hint); }
+  #info b { color: var(--text); }
+  #formErr, #homeErr { color: var(--danger); text-align: center; margin-top: 10px; font-size: 14px; }
 
-  .slider { 
-    direction: ltr; 
-    padding: 16px 10px 8px; 
-    user-select: none; 
-    -webkit-user-select: none; 
-  }
-
-  .track { 
-    position: relative; 
-    height: 10px; 
-    border-radius: 99px; 
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
-  }
-
-  .fill { 
-    position: absolute; 
-    top: 0; 
-    bottom: 0; 
-    background: var(--accent-gradient); 
-    border-radius: 99px; 
-    box-shadow: 0 0 12px var(--accent-glow);
-  }
-
-  .playhead { 
-    position: absolute; 
-    top: -5px; 
-    bottom: -5px; 
-    width: 3px; 
-    background: #ffffff;
-    box-shadow: 0 0 8px rgba(255,255,255,0.8);
-    border-radius: 2px; 
-    pointer-events: none; 
-    z-index: 1;
-  }
-
-  .thumb { 
-    position: absolute; 
-    top: 50%; 
-    width: 28px; 
-    height: 28px; 
-    margin: -14px 0 0 -14px;
-    border-radius: 50%; 
-    background: #ffffff; 
-    border: 3.5px solid var(--accent-blue);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
-    touch-action: none; 
-    cursor: grab; 
-    z-index: 2; 
-    transition: transform 0.15s ease, border-color 0.15s ease;
-  }
-
-  .thumb::after {
-    content: "";
-    position: absolute;
-    inset: 5px;
-    background: var(--accent-blue);
-    border-radius: 50%;
-  }
-
-  .thumb.drag { 
-    transform: scale(1.2); 
-    cursor: grabbing;
-  }
-
-  #tE { 
-    border-color: var(--danger-red); 
-  }
-  #tE::after {
-    background: var(--danger-red);
-  }
-
-  .scale { 
-    direction: ltr; 
-    display: flex; 
-    justify-content: space-between;
-    font-size: 13px; 
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-weight: 600;
-    color: var(--text-muted); 
-    padding: 4px 6px 0; 
-  }
-
-  /* Control Boxes */
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-
-  .box { 
-    background: var(--card-bg); 
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius-xl); 
-    padding: 12px; 
-    text-align: center; 
-    box-shadow: var(--card-shadow);
-  }
-
-  .lbl { 
-    font-size: 13px; 
-    font-weight: 700;
-    color: var(--text-muted); 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-  }
-
-  .val { 
-    font-size: 24px; 
-    font-weight: 800; 
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    margin: 6px 0 10px; 
-    direction: ltr; 
-    color: var(--text-primary);
-    letter-spacing: 0.5px;
-  }
-
-  .mini { display: flex; gap: 6px; justify-content: center; }
-
-  .mini button { 
-    flex: 1; 
-    border: 1px solid var(--glass-border); 
-    border-radius: var(--radius-md); 
-    padding: 8px 0; 
-    font-size: 13px;
-    font-weight: 700;
-    background: var(--glass-bg); 
-    color: var(--text-primary); 
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .mini button:active { 
-    transform: scale(0.94);
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  /* Button Styles */
-  button.ghost { 
-    width: 100%; 
-    padding: 14px; 
-    border: 1px solid var(--card-border); 
-    border-radius: var(--radius-lg);
-    font-size: 15px; 
-    font-weight: 700;
-    background: var(--card-bg); 
-    color: var(--text-primary); 
-    cursor: pointer;
-    backdrop-filter: blur(10px);
-    transition: all 0.2s ease;
-    box-shadow: var(--card-shadow);
-  }
-
-  button.ghost:active {
-    transform: scale(0.98);
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  button.primary { 
-    width: 100%; 
-    margin-top: 10px; 
-    padding: 16px; 
-    border: 0; 
-    border-radius: var(--radius-lg);
-    font-size: 16px; 
-    font-weight: 800; 
-    background: var(--accent-gradient); 
-    color: #ffffff; 
-    cursor: pointer;
-    box-shadow: 0 8px 20px var(--accent-glow);
-    transition: all 0.2s ease;
-  }
-
-  button.primary:active {
-    transform: scale(0.98);
-    box-shadow: 0 4px 12px var(--accent-glow);
-  }
-
-  button:disabled { 
-    opacity: 0.5; 
-    cursor: not-allowed;
-    transform: none !important;
-  }
-
-  /* Home Screen Styles */
-  .brand-logo {
-    width: 80px;
-    height: 80px;
-    margin: 10px auto 16px;
-    background: var(--accent-gradient);
-    border-radius: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 38px;
-    box-shadow: 0 12px 28px var(--accent-glow);
-    animation: pulseGlow 3s infinite ease-in-out;
-  }
-
-  .home-card {
-    background: var(--card-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--card-border);
-    border-radius: var(--radius-xl);
-    padding: 24px 18px;
-    box-shadow: var(--card-shadow);
-    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  #url { 
-    width: 100%; 
-    margin: 18px 0 12px; 
-    padding: 16px; 
-    border-radius: var(--radius-lg); 
-    font-size: 15px; 
-    border: 1px solid var(--glass-border); 
-    background: rgba(15, 23, 42, 0.6); 
-    color: #ffffff; 
-    transition: all 0.2s ease;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
-  }
-
-  #url:focus {
-    border-color: var(--accent-blue);
-    box-shadow: 0 0 0 3px var(--accent-glow), inset 0 2px 4px rgba(0,0,0,0.3);
-  }
-
-  .home-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  #info { 
-    margin: 14px 0 4px; 
-    text-align: center; 
-    font-size: 13.5px; 
-    color: var(--text-muted); 
-    line-height: 1.6; 
-  }
-
-  #formErr, #homeErr { 
-    color: #f87171; 
-    text-align: center; 
-    margin-top: 12px; 
-    font-size: 14px; 
-    font-weight: 600;
-  }
-
-  #main {
-    animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 
 <!-- تحميل -->
 <div id="loading" class="center hidden">
-  <div class="spinner-wrapper">
-    <div class="spinner"></div>
-  </div>
-  <div><b style="font-size: 17px;">جاري تجهيز الفيديو...</b></div>
+  <div class="spinner"></div>
+  <div><b>جاري تجهيز الفيديو...</b></div>
   <div class="hint">قد يستغرق الأمر من بضع ثوانٍ إلى دقيقة حسب حجم الفيديو</div>
 </div>
 
 <!-- الشاشة الرئيسية (عند الفتح من زر Open بدون رابط) -->
 <div id="home" class="hidden">
-  <div class="home-card">
-    <div class="brand-logo">📥</div>
-    <h2 style="text-align:center; margin:0 0 6px; font-size: 22px; font-weight: 800;">Vortex downloader</h2>
-    <div class="hint" style="text-align:center">حمّل فيديو أو صوت، أو قص مقطع من أي رابط بسرعة فائقة</div>
-    
-    <div id="stepUrl" style="margin-top: 10px;">
-      <input id="url" type="url" dir="ltr" placeholder="https://..." autocomplete="off">
-      <div class="home-actions">
-        <button class="ghost" id="paste">📋 لصق من الحافظة</button>
-        <button class="primary" id="next">متابعة ➔</button>
-      </div>
-    </div>
-    
-    <div id="stepPick" class="hidden home-actions" style="margin-top: 16px;">
-      <button class="primary" id="pV">🎬 تحميل فيديو (HD)</button>
-      <button class="ghost" id="pA">🎵 تحميل صوت فقط (MP3)</button>
-      <button class="ghost" id="pT">✂️ قص مقطع (بالسلايدر)</button>
-    </div>
-    
-    <div id="homeErr"></div>
+  <div class="brand">
+    <div class="logo"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></div>
+    <h2>Vortex downloader</h2>
+    <div class="hint">حمّل فيديو أو صوت، أو قص مقطع من أي رابط</div>
   </div>
+  <div id="stepUrl">
+    <input id="url" type="url" dir="ltr" placeholder="الصق الرابط هنا" autocomplete="off">
+    <button class="ghost" id="paste">📋 لصق من الحافظة</button>
+    <button class="primary" id="next">متابعة</button>
+  </div>
+  <div id="stepPick" class="hidden">
+    <div id="pick-title">اختر ما تريد تحميله</div>
+    <button class="opt" id="pV"><span class="ic">🎬</span><span>فيديو<small>أعلى جودة متاحة</small></span></button>
+    <button class="opt" id="pA"><span class="ic">🎵</span><span>صوت فقط<small>ملف MP3</small></span></button>
+    <button class="opt" id="pT"><span class="ic">✂️</span><span>قص مقطع<small>حدّد البداية والنهاية بالسلايدر</small></span></button>
+  </div>
+  <div id="homeErr"></div>
 </div>
 
 <!-- خطأ -->
 <div id="failed" class="center hidden">
-  <div style="font-size:54px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));">⚠️</div>
+  <div style="font-size:42px">😕</div>
   <div class="err" id="failMsg"></div>
 </div>
 
 <!-- الواجهة الرئيسية -->
 <div id="main" class="hidden">
-  <div class="player-card">
-    <video id="video" playsinline preload="metadata" controls></video>
-    <div id="title"></div>
-  </div>
+  <video id="video" playsinline preload="metadata" controls></video>
+  <div id="title"></div>
 
-  <div class="slider-box">
-    <div class="slider" id="slider">
-      <div class="track" id="track">
-        <div class="fill" id="fill"></div>
-        <div class="playhead" id="playhead"></div>
-        <div class="thumb" id="tS"></div>
-        <div class="thumb" id="tE"></div>
-      </div>
+  <div class="slider" id="slider">
+    <div class="track" id="track">
+      <div class="fill" id="fill"></div>
+      <div class="playhead" id="playhead"></div>
+      <div class="thumb" id="tS"></div>
+      <div class="thumb" id="tE"></div>
     </div>
-    <div class="scale"><span>0:00</span><span id="total">0:00</span></div>
   </div>
+  <div class="scale"><span>0:00</span><span id="total">0:00</span></div>
 
   <div class="row">
-    <div class="box">
-      <div class="lbl">🟢 البداية</div>
+    <div class="box s">
+      <div class="lbl">البداية</div>
       <div class="val" id="vS">0:00</div>
       <div class="mini">
         <button id="sM">−1ث</button>
@@ -474,8 +160,8 @@
         <button id="sH">📍 هنا</button>
       </div>
     </div>
-    <div class="box">
-      <div class="lbl">🔴 النهاية</div>
+    <div class="box e">
+      <div class="lbl">النهاية</div>
       <div class="val" id="vE">0:00</div>
       <div class="mini">
         <button id="eM">−1ث</button>
@@ -498,7 +184,7 @@
 
   const $ = (id) => document.getElementById(id);
   let key = new URLSearchParams(location.search).get('k');
-  const video = $('video'), track =$('track');
+  const video = $('video'), track = $('track');
 
   let dur = 0, start = 0, end = 0, previewing = false, uiStarted = false;
 
@@ -522,8 +208,10 @@
   }
 
   function fail(msg) {
-    $('loading').classList.add('hidden');$('main').classList.add('hidden');
-    $('home').classList.add('hidden');$('failMsg').textContent = msg;
+    $('loading').classList.add('hidden');
+    $('main').classList.add('hidden');
+    $('home').classList.add('hidden');
+    $('failMsg').textContent = msg;
     $('failed').classList.remove('hidden');
   }
 
@@ -545,12 +233,15 @@
 
   function render() {
     const pS = (start / dur) * 100, pE = (end / dur) * 100;
-    $('tS').style.left = pS + '\%';$('tE').style.left = pE + '%';
-    $('fill').style.left = pS + '\%';$('fill').style.width = (pE - pS) + '%';
-    $('vS').textContent = fmt(start);$('vE').textContent = fmt(end);
+    $('tS').style.left = pS + '%';
+    $('tE').style.left = pE + '%';
+    $('fill').style.left = pS + '%';
+    $('fill').style.width = (pE - pS) + '%';
+    $('vS').textContent = fmt(start);
+    $('vE').textContent = fmt(end);
     const len = end - start;
-    let info = `مدة المقطع المُحدد: <b style="color:var(--text-primary);">${fmt(len)}</b>`;
-    if (len > 600) info += '<br><span style="color:#f59e0b; font-size: 12px;">⚠️ المقاطع الطويلة تُضغط تلقائياً لتناسب حد تيليجرام (50MB)</span>';
+    let info = `مدة المقطع: <b>${fmt(len)}</b>`;
+    if (len > 600) info += '<br>المقاطع الطويلة تُضغط تلقائياً لتناسب حد تيليجرام (50MB)';
     $('info').innerHTML = info;
   }
 
@@ -577,9 +268,12 @@
 
   /* ---------- الأزرار ---------- */
   function bindButtons() {
-    $('sM').onclick = () => { setStart(start - 1); seek(start); render(); };$('sP').onclick = () => { setStart(start + 1); seek(start); render(); };
-    $('eM').onclick = () => { setEnd(end - 1); seek(end); render(); };$('eP').onclick = () => { setEnd(end + 1); seek(end); render(); };
-    $('sH').onclick = () => { setStart(video.currentTime \vert{}\vert{} 0); render(); };$('eH').onclick = () => { setEnd(video.currentTime || 0); render(); };
+    $('sM').onclick = () => { setStart(start - 1); seek(start); render(); };
+    $('sP').onclick = () => { setStart(start + 1); seek(start); render(); };
+    $('eM').onclick = () => { setEnd(end - 1); seek(end); render(); };
+    $('eP').onclick = () => { setEnd(end + 1); seek(end); render(); };
+    $('sH').onclick = () => { setStart(video.currentTime || 0); render(); };
+    $('eH').onclick = () => { setEnd(video.currentTime || 0); render(); };
 
     $('preview').onclick = () => {
       if (previewing) { video.pause(); return; }
@@ -591,7 +285,8 @@
     };
 
     $('go').onclick = async () => {
-      const b = $('go');$('formErr').textContent = '';
+      const b = $('go');
+      $('formErr').textContent = '';
       b.disabled = true;
       b.textContent = '⏳ جاري الإرسال...';
       try {
@@ -630,11 +325,13 @@
     start = 0;
     end = Math.min(dur, 60);
     if (end < 1) end = dur;
-    $('title').textContent = info.title \vert{}\vert{} '';$('total').textContent = fmt(dur);
+    $('title').textContent = info.title || '';
+    $('total').textContent = fmt(dur);
     bindThumb($('tS'), 's');
     bindThumb($('tE'), 'e');
     bindButtons();
-    $('loading').classList.add('hidden');$('main').classList.remove('hidden');
+    $('loading').classList.add('hidden');
+    $('main').classList.remove('hidden');
     render();
   }
 
@@ -677,7 +374,8 @@
   /* ---------- الشاشة الرئيسية ---------- */
   function startHome() {
     $('home').classList.remove('hidden');
-    const err = (m) => { $('homeErr').textContent = m \vert{}\vert{} ''; };$('paste').onclick = () => {
+    const err = (m) => { $('homeErr').textContent = m || ''; };
+    $('paste').onclick = () => {
       const put = (t) => { if (t) $('url').value = String(t).trim(); };
       if (tg && tg.readTextFromClipboard) tg.readTextFromClipboard(put);
       else if (navigator.clipboard) navigator.clipboard.readText().then(put).catch(() => {});
@@ -688,30 +386,32 @@
       if (!/^https?:\/\//i.test(url)) return err('الصق رابطاً صحيحاً يبدأ بـ https://');
       const b = $('next'); b.disabled = true; b.textContent = '⏳ جاري الفحص...';
       const r = await post('/api/create', { url: url });
-      b.disabled = false; b.textContent = 'متابعة ➔';
+      b.disabled = false; b.textContent = 'متابعة';
       if (!r.ok) {
         const m = { bad_url: 'الرابط غير صالح.', too_many: 'عندك طلبات كثيرة قيد المعالجة، انتظر قليلاً.',
                     bad_signature: 'افتح الصفحة من داخل تيليجرام.' };
         return err(m[r.error] || 'تعذّر قبول الرابط، حاول مرة أخرى.');
       }
       key = r.key;
-      $('stepUrl').classList.add('hidden');$('stepPick').classList.remove('hidden');
+      $('stepUrl').classList.add('hidden');
+      $('stepPick').classList.remove('hidden');
     };
     const dl = async (action) => {
       err('');
       ['pV', 'pA', 'pT'].forEach((i) => { $(i).disabled = true; });
       const r = await post('/api/download', { key: key, action: action });
       if (r.ok) {
-        $('stepPick').innerHTML = '<div class="center"><div style="font-size:54px">✅</div>' +
-          '<div><b style="font-size:18px;">تم! ستصلك النتيجة في المحادثة</b></div></div>';
+        $('stepPick').innerHTML = '<div class="center"><div style="font-size:42px">✅</div>' +
+          '<div><b>تم! ستصلك النتيجة في المحادثة</b></div></div>';
         setTimeout(() => { if (tg) tg.close(); }, 1200);
       } else {
         ['pV', 'pA', 'pT'].forEach((i) => { $(i).disabled = false; });
         err('تعذّر بدء التحميل، حاول مرة أخرى.');
       }
     };
-    $('pV').onclick = () => dl('video');$('pA').onclick = () => dl('audio');
-    $('pT').onclick = () => {$('home').classList.add('hidden'); begin(); };
+    $('pV').onclick = () => dl('video');
+    $('pA').onclick = () => dl('audio');
+    $('pT').onclick = () => { $('home').classList.add('hidden'); begin(); };
   }
 
   if (key) begin(); else startHome();
