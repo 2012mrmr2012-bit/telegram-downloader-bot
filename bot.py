@@ -43,6 +43,12 @@ JOB_TTL = 45 * 60               # صلاحية الطلب (بالثواني)
 LINK_TTL = int(os.getenv("LINK_TTL_MIN", "60")) * 60      # صلاحية رابط التحميل المباشر
 LINK_MAX_MB = int(os.getenv("LINK_MAX_MB", "1500"))        # أقصى حجم نسمح بتحميله للرابط المباشر
 
+# ------------------------------------------------------------------
+# إعدادات الاشتراك الإجباري
+# ------------------------------------------------------------------
+REQUIRED_CHANNEL = "@vo3textech"                     # يوزر القناة
+REQUIRED_CHANNEL_URL = "https://t.me/vo3textech"     # رابط القناة للأزرار
+
 # كوكيز يوتيوب (اختياري): محتوى ملف cookies.txt مشفّر base64 في متغير YT_COOKIES_B64
 COOKIES_B64 = os.getenv("YT_COOKIES_B64", "")
 COOKIES_PATH = os.path.join(BASE_DIR, "cookies.txt")
@@ -62,6 +68,39 @@ links_lock = threading.Lock()
 heavy = threading.BoundedSemaphore(int(os.getenv("MAX_PARALLEL", "2")))
 # أقصى عدد طلبات نشطة للمستخدم الواحد
 MAX_JOBS_PER_USER = 3
+
+
+# ------------------------------------------------------------------
+# التحقق من الاشتراك في القناة
+# ------------------------------------------------------------------
+def is_subscribed(user_id):
+    """يتحقق هل المستخدم مشترك في القناة الإجبارية. يرجع True لو مشترك."""
+    try:
+        member = bot.get_chat_member(REQUIRED_CHANNEL, user_id)
+        # الحالات المقبولة: عضو، مشرف، مالك، مقيّد (لكنه لسه عضو)
+        return member.status in ("member", "administrator", "creator")
+    except Exception as e:
+        print(f"[SUB-CHECK] فشل التحقق من اشتراك {user_id}: {e}", flush=True)
+        return False
+
+
+def send_subscription_required(chat_id):
+    """يرسل رسالة تطلب الاشتراك في القناة مع أزرار."""
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("📢 اشترك في القناة", url=REQUIRED_CHANNEL_URL)
+    )
+    markup.row(
+        InlineKeyboardButton("✅ تحقق من الاشتراك", callback_data="check_sub")
+    )
+    bot.send_message(
+        chat_id,
+        "🚫 **عذراً، يجب عليك الاشتراك في القناة أولاً لاستخدام البوت.**\n\n"
+        f"📢 اشترك في القناة: {REQUIRED_CHANNEL_URL}\n\n"
+        "بعد الاشتراك، اضغط على زر **✅ تحقق من الاشتراك** 👇",
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
 
 
 # ------------------------------------------------------------------
@@ -535,6 +574,12 @@ def api_create():
     user = verify_init_data(request.headers.get("X-Init-Data", ""))
     if not user:
         return jsonify(ok=False, error="bad_signature"), 403
+
+    # التحقق من الاشتراك في القناة
+    if not is_subscribed(user["id"]):
+        return jsonify(ok=False, error="not_subscribed",
+                       channel_url=REQUIRED_CHANNEL_URL), 403
+
     m = URL_RE.search(str(data.get("url", "")))
     url = m.group(0) if m else ""
     if not url or not is_safe_url(url):
@@ -668,6 +713,12 @@ def janitor():
 # ------------------------------------------------------------------
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
+    uid = message.from_user.id if message.from_user else 0
+    # التحقق من الاشتراك
+    if not is_subscribed(uid):
+        send_subscription_required(message.chat.id)
+        return
+
     bot.reply_to(
         message,
         "👋 **أهلاً بك في بوت Vortex downloader!** 📥\n\n"
@@ -680,9 +731,14 @@ def send_welcome(message):
 
 @bot.message_handler(func=lambda m: m.text and ("http://" in m.text or "https://" in m.text))
 def ask_quality(message):
+    uid = message.from_user.id if message.from_user else 0
+    # التحقق من الاشتراك
+    if not is_subscribed(uid):
+        send_subscription_required(message.chat.id)
+        return
+
     m = URL_RE.search(message.text)
     url = m.group(0) if m else ""
-    uid = message.from_user.id if message.from_user else 0
     if not url or not is_safe_url(url):
         bot.reply_to(message, "❌ الرابط غير صالح.")
         return
@@ -715,6 +771,20 @@ def ask_quality(message):
         message,
         "🎯 **تم استلام الرابط بنجاح!**\n\nاختر الصيغة التي ترغب بها من الأزرار أدناه:",
         reply_markup=markup,
+        parse_mode="Markdown"
+    )
+
+
+# معالج أي رسالة نصية أخرى (لفحص الاشتراك حتى لو الرسالة مش رابط ولا أمر)
+@bot.message_handler(func=lambda m: True, content_types=['text'])
+def catch_all_text(message):
+    uid = message.from_user.id if message.from_user else 0
+    if not is_subscribed(uid):
+        send_subscription_required(message.chat.id)
+        return
+    bot.reply_to(
+        message,
+        "📎 أرسل لي رابط فيديو أو صوت وسأحمله لك!",
         parse_mode="Markdown"
     )
 
@@ -755,10 +825,44 @@ def handle_trim_range(message, key):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
+    # التعامل مع زر التحقق من الاشتراك
+    if call.data == "check_sub":
+        uid = call.from_user.id if call.from_user else 0
+        if is_subscribed(uid):
+            bot.answer_callback_query(call.id, "✅ تم التحقق! أنت مشترك، يمكنك استخدام البوت الآن.")
+            try:
+                bot.edit_message_text(
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    text="✅ **تم التحقق من اشتراكك بنجاح!**\n\n"
+                         "أرسل لي رابط أي فيديو أو صوت وسأحمله لك 📥",
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                pass
+        else:
+            bot.answer_callback_query(
+                call.id,
+                "❌ لم يتم العثور على اشتراكك! اشترك في القناة أولاً ثم اضغط تحقق مرة أخرى.",
+                show_alert=True
+            )
+        return
+
     try:
         action, key = call.data.split("|", 1)
     except ValueError:
         bot.answer_callback_query(call.id, "طلب غير صالح")
+        return
+
+    # التحقق من الاشتراك عند الضغط على أزرار التحميل/القص
+    uid = call.from_user.id if call.from_user else 0
+    if not is_subscribed(uid):
+        bot.answer_callback_query(
+            call.id,
+            "🚫 يجب عليك الاشتراك في القناة أولاً لاستخدام البوت!",
+            show_alert=True
+        )
+        send_subscription_required(call.message.chat.id)
         return
 
     job = jobs.get(key)
@@ -828,6 +932,7 @@ def main():
     else:
         print("[WARN] لا يوجد دومين عام، سيُستخدم القص النصي بدل الميني اب.", flush=True)
 
+    print(f"📢 الاشتراك الإجباري مفعّل: {REQUIRED_CHANNEL}", flush=True)
     print("🤖 Vortex downloader يعمل الآن...", flush=True)
     bot.infinity_polling()
 
